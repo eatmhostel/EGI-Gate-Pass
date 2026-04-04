@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   View,
   Text,
@@ -9,9 +8,13 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
+
+import { SafeAreaView } from 'react-native-safe-area-context'; // ✅ FIXED
 import Navbar from "./components/Navbar";
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { useNavigation } from '@react-navigation/native'; // ✅ import useNavigation
+import { MaterialIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { EXPO_PUBLIC_API_URL } from "@env";
+import { AuthContext } from "./context/AuthContext";
 
 const { width, height } = Dimensions.get('window');
 
@@ -49,6 +52,110 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const { setUser } = useContext(AuthContext);
+  const handleLogin = async () => {
+    try {
+      const response = await fetch(
+        `${EXPO_PUBLIC_API_URL}/admin/login`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, password }),
+        }
+      );
+      const data = await response.json();
+
+      if (data.success) {
+        setUser({
+          name: email || "Admin",
+          role: "admin",   // ✅ ADD THIS
+        });
+
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "AdminDashboard" }],
+        });
+      } else {
+        alert(data.message || "Login failed ❌");
+      }
+    } catch (error) {
+      console.log(error);
+      alert("Server error ❌");
+    }
+  };
+  const handleStudentLogin = async () => {
+    try {
+      const res = await fetch(`${EXPO_PUBLIC_API_URL}/student/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          regNo: email, // 👈 IMPORTANT (user id)
+          password,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setUser({
+          name: data.user.name,
+          regNo: data.user.regNo,
+          course: data.user.course,
+          branch: data.user.branch,
+          email: data.user.email,
+          role: "student",
+        });
+
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "StudentDashboard" }],
+        });
+      } else {
+        alert(data.message);
+      }
+    } catch (err) {
+      alert("Server error ❌");
+    }
+  };
+  const handleSecurityLogin = async () => {
+    try {
+      const res = await fetch(`${EXPO_PUBLIC_API_URL}/security/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          empId: email,
+          password,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setUser({
+          name: data.user.name,
+          empId: data.user.empId,
+          email: data.user.email,
+          phone: data.user.phone,
+          role: "security",
+        });
+
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "SecurityDashboard" }],
+        });
+      } else {
+        alert(data.message);
+      }
+    } catch (err) {
+      alert("Server error ❌");
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -89,7 +196,7 @@ const Login = () => {
             <View style={styles.form}>
               {/* Email */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email or Student ID</Text>
+                <Text style={styles.inputLabel}>User ID</Text>
                 <View style={styles.inputContainer}>
                   <MaterialIcons name="alternate-email" size={22} color={COLORS.outline} style={styles.inputIcon} />
                   <TextInput
@@ -145,14 +252,12 @@ const Login = () => {
               <TouchableOpacity
                 style={styles.signInButton}
                 onPress={() => {
-                  if (portal === "STUDENT") {
-                    navigation.navigate("StudentDashboard");
+                  if (portal === "ADMIN") {
+                    handleLogin();
+                  } else if (portal === "STUDENT") {
+                    handleStudentLogin();
                   } else if (portal === "SECURITY") {
-                    navigation.navigate("SecurityDashboard");
-                  } else if (portal === "ADMIN") {
-                    // You can create AdminDashboard later
-                    navigation.navigate("AdminDashboard");
-                    // navigation.navigate("AdminDashboard");
+                    handleSecurityLogin();
                   }
                 }}
               >
@@ -184,7 +289,7 @@ const Login = () => {
 // --- Styles remain same ---
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.surface },
-  scrollContainer: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  scrollContainer: { flexGrow: 1, justifyContent: 'center', padding: 20 },
   container: {
     flexDirection: 'row',
     backgroundColor: COLORS.surfaceContainerLowest,

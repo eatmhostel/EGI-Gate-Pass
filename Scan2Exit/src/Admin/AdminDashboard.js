@@ -1,4 +1,4 @@
-import React from "react";
+import { React, useRef, useEffect,useState } from "react";
 import {
     View,
     Text,
@@ -12,9 +12,31 @@ import { MaterialIcons } from "@expo/vector-icons";
 import Navbar from "../components/Navbar";
 import FooterAdmin from "../components/FooterAdmin";
 import { useNavigation } from "@react-navigation/native";
+import { EXPO_PUBLIC_API_URL } from "@env";
 
 
 export default function AdminDashboard() {
+    const [studentCount, setStudentCount] = useState(0);
+    const [securityCount, setSecurityCount] = useState(0);
+    useEffect(() => {
+        fetchCounts();
+    }, []);
+
+    const fetchCounts = async () => {
+        try {
+            const res1 = await fetch(`${EXPO_PUBLIC_API_URL}/admin/total-students`);
+            const data1 = await res1.json();
+
+            const res2 = await fetch(`${EXPO_PUBLIC_API_URL}/admin/total-security`);
+            const data2 = await res2.json();
+
+            if (data1.success) setStudentCount(data1.count);
+            if (data2.success) setSecurityCount(data2.count);
+        } catch (err) {
+            console.log(err);
+        }
+    };
+
     const navigation = useNavigation();
     return (
         <View style={styles.container}>
@@ -36,8 +58,11 @@ export default function AdminDashboard() {
                 <View style={styles.grid}>
                     <View style={styles.card}>
                         <MaterialIcons name="group" size={26} color="#0040a1" />
-                        <Text style={styles.cardLabel}>Total Students</Text>
-                        <Text style={styles.cardValue}>2450</Text>
+                        <Text style={styles.cardValue}>{studentCount}</Text>
+                    </View>
+                    <View style={styles.card}>
+                        <MaterialIcons name="security" size={26} color="#555" />
+                        <Text style={styles.cardValue}>{securityCount}</Text>
                     </View>
 
                     <View style={styles.card}>
@@ -51,12 +76,6 @@ export default function AdminDashboard() {
                         <Text style={styles.cardLabel}>Pending Requests</Text>
                         <Text style={styles.cardValue}>12</Text>
                     </View>
-
-                    <View style={styles.card}>
-                        <MaterialIcons name="security" size={26} color="#555" />
-                        <Text style={styles.cardLabel}>Guards Online</Text>
-                        <Text style={styles.cardValue}>8</Text>
-                    </View>
                 </View>
 
                 {/* Actions */}
@@ -67,10 +86,12 @@ export default function AdminDashboard() {
                     onPress={() => navigation.navigate("AdminRequests")}
                 >
                     <MaterialIcons name="check-circle" size={20} color="#fff" />
-                    <Text style={styles.btnText}>Approve Student Request</Text>
+                    <Text style={styles.btnText}>Approved Student</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: "#1b6d24" }]}>
+                <TouchableOpacity
+                    style={[styles.primaryBtn, { backgroundColor: "#1b6d24" }]}
+                    onPress={() => navigation.navigate("AddSecurity")}
+                >
                     <MaterialIcons name="shield" size={20} color="#fff" />
                     <Text style={styles.btnText}>Add New Security</Text>
                 </TouchableOpacity>

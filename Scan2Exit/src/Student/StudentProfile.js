@@ -8,17 +8,20 @@ import {
     TouchableOpacity,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/FooterStudent";
 
 export default function StudentProfile() {
+    const { user } = useContext(AuthContext);
     return (
         <View style={styles.container}>
             <Navbar />
 
             <ScrollView contentContainerStyle={styles.scroll}>
-                
+
                 {/* Profile Header */}
                 <View style={styles.profileSection}>
                     <View style={styles.imageWrapper}>
@@ -33,12 +36,12 @@ export default function StudentProfile() {
                         </View>
                     </View>
 
-                    <Text style={styles.name}>Alex Rivers</Text>
+                    <Text style={styles.name}>{user?.name}</Text>
 
                     <View style={styles.metaRow}>
-                        <Text style={styles.meta}>ID 2024-8832</Text>
+                        <Text style={styles.meta}>{user?.regNo}</Text>
                         <Text style={styles.dot}>•</Text>
-                        <Text style={styles.branch}>Computer Science</Text>
+                        <Text style={styles.value}>{user?.branch}</Text>
                     </View>
                 </View>
 
@@ -67,29 +70,29 @@ export default function StudentProfile() {
 
                     <View style={styles.infoBlock}>
                         <Text style={styles.label}>Full Name</Text>
-                        <Text style={styles.value}>Alex Rivers</Text>
+                        <Text style={styles.value}>{user?.name}</Text>
                     </View>
 
                     <View style={styles.row}>
                         <View style={styles.infoBlock}>
                             <Text style={styles.label}>Registration Number</Text>
-                            <Text style={styles.value}>2024CS101</Text>
+                            <Text style={styles.value}>{user?.regNo}</Text>
                         </View>
 
                         <View style={styles.infoBlock}>
                             <Text style={styles.label}>Course</Text>
-                            <Text style={styles.value}>B.Tech</Text>
+                            <Text style={styles.value}>{user?.course}</Text>
                         </View>
                     </View>
 
                     <View style={styles.infoBlock}>
                         <Text style={styles.label}>Branch</Text>
-                        <Text style={styles.value}>CSE</Text>
+                        <Text style={styles.value}>{user?.branch}</Text>
                     </View>
 
                     <View style={styles.infoBlock}>
                         <Text style={styles.label}>Institutional Email</Text>
-                        <Text style={styles.email}>alex.rivers@college.edu</Text>
+                        <Text style={styles.email}>{user?.email}</Text>
                     </View>
                 </View>
 
@@ -178,8 +181,9 @@ const styles = StyleSheet.create({
     },
 
     branch: {
-        fontSize: 10,
+        fontSize: 12,
         color: "#0040a1",
+        fontWeight: "600",
     },
 
     dot: {

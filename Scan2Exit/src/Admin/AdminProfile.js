@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
+import { EXPO_PUBLIC_API_URL } from "@env";
 
 import Navbar from "../components/Navbar";
 import FooterAdmin from "../components/FooterAdmin";
@@ -22,6 +23,26 @@ const { width } = Dimensions.get("window");
 export default function AdminProfile() {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState("overview");
+  const [studentCount, setStudentCount] = useState(0);
+  const [securityCount, setSecurityCount] = useState(0);
+  useEffect(() => {
+    fetchCounts();
+  }, []);
+
+  const fetchCounts = async () => {
+    try {
+      const res1 = await fetch(`${EXPO_PUBLIC_API_URL}/admin/total-students`);
+      const data1 = await res1.json();
+
+      const res2 = await fetch(`${EXPO_PUBLIC_API_URL}/admin/total-security`);
+      const data2 = await res2.json();
+
+      if (data1.success) setStudentCount(data1.count);
+      if (data2.success) setSecurityCount(data2.count);
+    } catch (err) {
+      console.log(err);
+    }
+  };
 
   // ✅ FIX: useRef so animation persists
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -67,7 +88,7 @@ export default function AdminProfile() {
               <View style={styles.statusIndicator} />
             </View>
 
-            <Text style={styles.name}>Admin Name</Text>
+            <Text style={styles.name}>EATM Admin</Text>
             <Text style={styles.role}>System Administrator</Text>
 
             <View style={styles.badge}>
@@ -75,27 +96,6 @@ export default function AdminProfile() {
             </View>
           </View>
         </LinearGradient>
-
-        {/* TABS */}
-        <View style={styles.tabContainer}>
-          {["overview", "activity", "security"].map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tab, activeTab === tab && styles.activeTab]}
-              onPress={() => handleTabChange(tab)}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  activeTab === tab && styles.activeTabText,
-                ]}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
         {/* CONTENT */}
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           {/* OVERVIEW */}
@@ -104,121 +104,17 @@ export default function AdminProfile() {
               <View style={styles.statsContainer}>
                 <View style={styles.statCard}>
                   <MaterialCommunityIcons name="account-group" size={24} color="#3949ab" />
-                  <Text style={styles.statNumber}>1,248</Text>
-                  <Text style={styles.statLabel}>Total Users</Text>
+                  <Text style={styles.statNumber}>{studentCount}</Text>
+                  <Text style={styles.statLabel}>Total Students</Text>
                 </View>
-
                 <View style={styles.statCard}>
-                  <MaterialIcons name="trending-up" size={24} color="#00c853" />
-                  <Text style={styles.statNumber}>98.5%</Text>
-                  <Text style={styles.statLabel}>Uptime</Text>
+                  <MaterialCommunityIcons name="account-group" size={24} color="#3949ab" />
+                  <Text style={styles.statNumber}>{securityCount}</Text>
+                  <Text style={styles.statLabel}>Total Security</Text>
                 </View>
-
-                <View style={styles.statCard}>
-                  <MaterialIcons name="security" size={24} color="#ff9800" />
-                  <Text style={styles.statNumber}>24</Text>
-                  <Text style={styles.statLabel}>Alerts</Text>
-                </View>
-
-                <View style={styles.statCard}>
-                  <MaterialIcons name="storage" size={24} color="#e53935" />
-                  <Text style={styles.statNumber}>68%</Text>
-                  <Text style={styles.statLabel}>Storage</Text>
-                </View>
-              </View>
-
-              {/* QUICK ACTIONS */}
-              <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>Quick Actions</Text>
-
-                <View style={styles.quickActionsContainer}>
-                  {[
-                    { icon: "people", text: "User Management" },
-                    { icon: "bar-chart", text: "Analytics" },
-                    { icon: "notifications", text: "Notifications" },
-                    { icon: "backup", text: "Backup" },
-                  ].map((item, index) => (
-                    <TouchableOpacity key={index} style={styles.quickAction}>
-                      <View style={styles.quickActionIcon}>
-                        <MaterialIcons name={item.icon} size={22} color="#fff" />
-                      </View>
-                      <Text style={styles.quickActionText}>{item.text}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* SETTINGS */}
-              <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>Account Settings</Text>
-
-                {[
-                  { icon: "person", text: "Edit Profile" },
-                  { icon: "notifications-active", text: "Notifications" },
-                  { icon: "language", text: "Language" },
-                  { icon: "help", text: "Help & Support" },
-                ].map((item, index) => (
-                  <TouchableOpacity key={index} style={styles.option}>
-                    <MaterialIcons name={item.icon} size={22} color="#3949ab" />
-                    <Text style={styles.optionText}>{item.text}</Text>
-                    <MaterialIcons name="chevron-right" size={22} color="#b0bec5" />
-                  </TouchableOpacity>
-                ))}
               </View>
             </>
           )}
-
-          {/* ACTIVITY */}
-          {activeTab === "activity" && (
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Recent Activity</Text>
-
-              {[
-                "System Backup Completed",
-                "New Admin User Added",
-                "Security Scan Completed",
-                "Failed Login Attempt",
-              ].map((text, index, arr) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.activityItem,
-                    index === arr.length - 1 && { borderBottomWidth: 0 }, // ✅ FIX
-                  ]}
-                >
-                  <View style={styles.activityIcon}>
-                    <MaterialIcons name="check-circle" size={20} color="#00c853" />
-                  </View>
-
-                  <View style={styles.activityContent}>
-                    <Text style={styles.activityTitle}>{text}</Text>
-                    <Text style={styles.activityTime}>2 hours ago</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* SECURITY */}
-          {activeTab === "security" && (
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Security Settings</Text>
-
-              {[
-                "Change Password",
-                "Two-Factor Authentication",
-                "Biometric Login",
-                "Login History",
-              ].map((text, index) => (
-                <TouchableOpacity key={index} style={styles.option}>
-                  <MaterialIcons name="lock" size={22} color="#3949ab" />
-                  <Text style={styles.optionText}>{text}</Text>
-                  <MaterialIcons name="chevron-right" size={22} color="#b0bec5" />
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
           {/* LOGOUT */}
           <TouchableOpacity
             style={styles.logout}
@@ -355,68 +251,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#78909c",
   },
-
-  sectionContainer: { marginTop: 20 },
-
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-
-  quickActionsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-
-  quickAction: {
-    width: (width - 50) / 2,
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-
-  quickActionIcon: {
-    backgroundColor: "#3949ab",
-    padding: 10,
-    borderRadius: 20,
-    marginBottom: 8,
-  },
-
-  quickActionText: {
-    fontSize: 14,
-  },
-
-  option: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-
-  optionText: {
-    flex: 1,
-    marginLeft: 10,
-  },
-
-  activityItem: {
-    flexDirection: "row",
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-
-  activityIcon: {
-    marginRight: 10,
-  },
-
-  activityContent: { flex: 1 },
-
   logout: {
     backgroundColor: "#e53935",
     padding: 15,

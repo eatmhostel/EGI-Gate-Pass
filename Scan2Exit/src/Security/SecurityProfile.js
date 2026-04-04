@@ -14,11 +14,13 @@ import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 import Navbar from "../components/Navbar";
 import FooterSecurity from "../components/FooterSecurity";
+import { useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
 
 export default function SecurityProfile() {
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [biometricEnabled, setBiometricEnabled] = useState(false);
-
+    const { user } = useContext(AuthContext);
     const handleLogout = () => {
         Alert.alert(
             "Logout",
@@ -28,8 +30,8 @@ export default function SecurityProfile() {
                     text: "Cancel",
                     style: "cancel"
                 },
-                { 
-                    text: "Logout", 
+                {
+                    text: "Logout",
                     onPress: () => console.log("Logout pressed"),
                     style: "destructive"
                 }
@@ -69,7 +71,7 @@ export default function SecurityProfile() {
                                 <MaterialIcons name="camera-alt" size={16} color="#fff" />
                             </TouchableOpacity>
                         </View>
-                        <Text style={styles.name}>Akash Kumar Sahoo</Text>
+                        <Text style={styles.name}>{user?.name}</Text>
                         <View style={styles.statusBadge}>
                             <View style={styles.statusDot} />
                             <Text style={styles.statusText}>On Duty</Text>
@@ -77,7 +79,7 @@ export default function SecurityProfile() {
                     </View>
                 </View>
 
-                
+
                 {/* Stats Cards */}
                 <View style={styles.statsContainer}>
                     <Text style={styles.sectionTitle}>Performance Stats</Text>
@@ -101,7 +103,7 @@ export default function SecurityProfile() {
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <Text style={styles.cardTitle}>Account Information</Text>
-                        
+
                     </View>
 
                     <View style={styles.infoRow}>
@@ -109,23 +111,7 @@ export default function SecurityProfile() {
                             <MaterialIcons name="badge" size={16} color="#5c6bc0" />
                             <Text style={styles.label}>Employee ID</Text>
                         </View>
-                        <Text style={styles.value}>SEC-1023</Text>
-                    </View>
-
-                    <View style={styles.infoRow}>
-                        <View style={styles.infoItem}>
-                            <MaterialIcons name="business" size={16} color="#5c6bc0" />
-                            <Text style={styles.label}>Department</Text>
-                        </View>
-                        <Text style={styles.value}>Campus Security</Text>
-                    </View>
-
-                    <View style={styles.infoRow}>
-                        <View style={styles.infoItem}>
-                            <MaterialIcons name="schedule" size={16} color="#5c6bc0" />
-                            <Text style={styles.label}>Shift</Text>
-                        </View>
-                        <Text style={styles.value}>Morning (8 AM - 4 PM)</Text>
+                        <Text style={styles.value}>{user?.empId}</Text>
                     </View>
 
                     <View style={styles.infoRow}>
@@ -133,7 +119,7 @@ export default function SecurityProfile() {
                             <MaterialIcons name="email" size={16} color="#5c6bc0" />
                             <Text style={styles.label}>Email</Text>
                         </View>
-                        <Text style={styles.value}>security@college.edu</Text>
+                        <Text style={styles.value}>{user?.email}</Text>
                     </View>
 
                     <View style={styles.infoRow}>
@@ -141,11 +127,16 @@ export default function SecurityProfile() {
                             <MaterialIcons name="phone" size={16} color="#5c6bc0" />
                             <Text style={styles.label}>Phone</Text>
                         </View>
-                        <Text style={styles.value}>+1 (555) 123-4567</Text>
+                        <Text style={styles.value}>{user?.phone}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                        <View style={styles.infoItem}>
+                            <MaterialIcons name="business" size={16} color="#5c6bc0" />
+                            <Text style={styles.label}>Department</Text>
+                        </View>
+                        <Text style={styles.value}>Campus Security</Text>
                     </View>
                 </View>
-
-
                 {/* Logout Button */}
                 <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                     <MaterialIcons name="logout" size={20} color="#f44336" />
@@ -258,7 +249,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
 
-    
+
 
     statsContainer: {
         marginBottom: 24,
