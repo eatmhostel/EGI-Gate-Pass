@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useContext } from "react";
 import {
     View,
     Text,
@@ -12,6 +12,9 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { EXPO_PUBLIC_API_URL } from "@env";
+
+// ✅ Import AuthContext
+import { AuthContext } from "../context/AuthContext";
 
 /* ── Helpers ─────────────────────────────────────────── */
 const getInitials = (name) =>
@@ -52,6 +55,8 @@ export default function Scanner() {
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
 
+    // ✅ Get actual user name
+    const { user } = useContext(AuthContext);
     const navigation = useNavigation();
     const scanLineAnim = useRef(new Animated.Value(0)).current;
     const overlayOpacity = useRef(new Animated.Value(0)).current;
@@ -117,7 +122,11 @@ export default function Scanner() {
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ qrData: data, scannedBy: "Security" }),
+                    // ✅ FIX: Use actual user name instead of hardcoded "Security"
+                    body: JSON.stringify({
+                        qrData: data,
+                        scannedBy: user?.name || "Security",
+                    }),
                 }
             );
             const json = await res.json();
@@ -186,73 +195,76 @@ export default function Scanner() {
     /* ── Render ───────────────────────────────────────── */
     return (
         <View style={s.fill}>
+            {/* Camera first, NO children inside */}
             <CameraView
                 style={s.fill}
                 onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
                 barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-            >
-                {/* Dark overlay with transparent centre */}
-                <View style={s.overlay}>
-                    <View style={s.topOverlay} />
-                    <View style={s.midOverlay}>
-                        <View style={s.sideOverlay} />
-                        <View style={s.scanArea}>
-                            <View style={[s.corner, s.tl]} />
-                            <View style={[s.corner, s.tr]} />
-                            <View style={[s.corner, s.bl]} />
-                            <View style={[s.corner, s.br]} />
-                            <Animated.View
-                                style={[
-                                    s.scanLine,
-                                    {
-                                        transform: [
-                                            {
-                                                translateY: scanLineAnim.interpolate({
-                                                    inputRange: [0, 1],
-                                                    outputRange: [0, 240],
-                                                }),
-                                            },
-                                        ],
-                                    },
-                                ]}
-                            />
-                        </View>
-                        <View style={s.sideOverlay} />
-                    </View>
-                    <View style={s.botOverlay} />
-                </View>
+                flash={flashEnabled ? "on" : "off"}
+            />
 
-                {/* Top bar */}
-                <View style={s.topBar}>
-                    <TouchableOpacity
-                        style={s.iconBtn}
-                        onPress={() => navigation.goBack()}
-                    >
-                        <MaterialIcons name="arrow-back" size={24} color="#fff" />
-                    </TouchableOpacity>
-                    <Text style={s.topTitle}>Security Scanner</Text>
-                    <TouchableOpacity
-                        style={s.iconBtn}
-                        onPress={() => setFlashEnabled((v) => !v)}
-                    >
-                        <MaterialIcons
-                            name={flashEnabled ? "flash-on" : "flash-off"}
-                            size={24}
-                            color="#fff"
+            {/* All overlays OUTSIDE the CameraView */}
+            {/* Dark overlay with transparent centre */}
+            <View style={s.overlay}>
+                <View style={s.topOverlay} />
+                <View style={s.midOverlay}>
+                    <View style={s.sideOverlay} />
+                    <View style={s.scanArea}>
+                        <View style={[s.corner, s.tl]} />
+                        <View style={[s.corner, s.tr]} />
+                        <View style={[s.corner, s.bl]} />
+                        <View style={[s.corner, s.br]} />
+                        <Animated.View
+                            style={[
+                                s.scanLine,
+                                {
+                                    transform: [
+                                        {
+                                            translateY: scanLineAnim.interpolate({
+                                                inputRange: [0, 1],
+                                                outputRange: [0, 240],
+                                            }),
+                                        },
+                                    ],
+                                },
+                            ]}
                         />
-                    </TouchableOpacity>
+                    </View>
+                    <View style={s.sideOverlay} />
                 </View>
+                <View style={s.botOverlay} />
+            </View>
 
-                {/* Instructions */}
-                <View style={s.instrBox}>
-                    <Text style={s.instrText}>
-                        Position QR code within the frame
-                    </Text>
-                    <Text style={s.instrSub}>
-                        Scanner will detect automatically
-                    </Text>
-                </View>
-            </CameraView>
+            {/* Top bar */}
+            <View style={s.topBar}>
+                <TouchableOpacity
+                    style={s.iconBtn}
+                    onPress={() => navigation.goBack()}
+                >
+                    <MaterialIcons name="arrow-back" size={24} color="#fff" />
+                </TouchableOpacity>
+                <Text style={s.topTitle}>Security Scanner</Text>
+                <TouchableOpacity
+                    style={s.iconBtn}
+                    onPress={() => setFlashEnabled((v) => !v)}
+                >
+                    <MaterialIcons
+                        name={flashEnabled ? "flash-on" : "flash-off"}
+                        size={24}
+                        color="#fff"
+                    />
+                </TouchableOpacity>
+            </View>
+
+            {/* Instructions */}
+            <View style={s.instrBox}>
+                <Text style={s.instrText}>
+                    Position QR code within the frame
+                </Text>
+                <Text style={s.instrSub}>
+                    Scanner will detect automatically
+                </Text>
+            </View>
 
             {/* ── Loading overlay ──────────────────────── */}
             {loading && (

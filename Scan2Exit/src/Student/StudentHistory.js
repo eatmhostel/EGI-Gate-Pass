@@ -24,6 +24,13 @@ const STATUS_CONFIG = {
         icon: "✓",
         border: "#bbf7d0",
     },
+    completed: {
+        label: "Completed",
+        bg: "#eef2ff",
+        text: "#6366f1",
+        icon: "✓",
+        border: "#c7d2fe",
+    },
     approved: {
         label: "Approved",
         bg: "#dcfce7",
@@ -74,8 +81,13 @@ function formatTime(dateStr) {
     });
 }
 
-// ✅ Compute display status from DB status + isExpired flag
+// ✅ Updated: completed takes priority over expired
 function getDisplayStatus(item) {
+    // Both entry + exit scanned → completed
+    if (item.scannedIn && item.scannedOut) {
+        return "completed";
+    }
+    // Approved but time expired
     if (item.status === "approved") {
         return item.isExpired ? "expired" : "active";
     }
@@ -135,13 +147,14 @@ export default function StudentHistory() {
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
             <View style={styles.container}>
                 <Navbar />
 
                 <ScrollView
                     contentContainerStyle={styles.scroll}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
                 >
                     {/* Header Section */}
                     <View style={styles.headerSection}>
@@ -153,10 +166,10 @@ export default function StudentHistory() {
                         </Text>
                     </View>
 
-                    {/* Summary Chips — uses display status */}
+                    {/* ✅ Summary Chips — includes completed */}
                     {!loading && history.length > 0 && (
                         <View style={styles.chipsRow}>
-                            {["active", "pending", "expired", "rejected"].map(
+                            {["active", "completed", "pending", "expired", "rejected"].map(
                                 (key) => {
                                     const count = history.filter(
                                         (h) => getDisplayStatus(h) === key
@@ -213,7 +226,7 @@ export default function StudentHistory() {
                         </View>
                     )}
 
-                    {/* Cards — uses display status */}
+                    {/* Cards */}
                     {!loading &&
                         history.length > 0 &&
                         history.map((item, index) => {
@@ -314,6 +327,36 @@ export default function StudentHistory() {
                                             </View>
                                         </View>
 
+                                        {/* ✅ Scan progress mini indicator */}
+                                        {item.status === "approved" && (
+                                            <View style={styles.miniScanProgress}>
+                                                <View style={styles.miniScanDot}>
+                                                    <View
+                                                        style={[
+                                                            styles.miniScanDotInner,
+                                                            item.scannedIn && styles.miniScanDotDone,
+                                                        ]}
+                                                    />
+                                                    <Text style={styles.miniScanLabel}>IN</Text>
+                                                </View>
+                                                <View
+                                                    style={[
+                                                        styles.miniScanLine,
+                                                        item.scannedIn && styles.miniScanLineDone,
+                                                    ]}
+                                                />
+                                                <View style={styles.miniScanDot}>
+                                                    <View
+                                                        style={[
+                                                            styles.miniScanDotInner,
+                                                            item.scannedOut && styles.miniScanDotDone,
+                                                        ]}
+                                                    />
+                                                    <Text style={styles.miniScanLabel}>OUT</Text>
+                                                </View>
+                                            </View>
+                                        )}
+
                                         {item.reason && (
                                             <>
                                                 <View style={styles.divider} />
@@ -361,7 +404,7 @@ const styles = StyleSheet.create({
     },
     scroll: {
         paddingHorizontal: 16,
-        paddingTop: 24,
+        paddingTop: 20,
         paddingBottom: 100,
     },
 
@@ -551,6 +594,51 @@ const styles = StyleSheet.create({
         fontWeight: "600",
         flex: 1,
         textAlign: "right",
+    },
+
+    /* ── ✅ Mini Scan Progress ── */
+    miniScanProgress: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        marginTop: 12,
+        paddingVertical: 8,
+        backgroundColor: "#faf9ff",
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#f1f0fb",
+    },
+    miniScanDot: {
+        alignItems: "center",
+        gap: 3,
+    },
+    miniScanDotInner: {
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        borderWidth: 2,
+        borderColor: "#cbd5e1",
+        backgroundColor: "#f1f5f9",
+    },
+    miniScanDotDone: {
+        borderColor: "#16a34a",
+        backgroundColor: "#16a34a",
+    },
+    miniScanLabel: {
+        fontSize: 9,
+        fontWeight: "700",
+        color: "#94a3b8",
+        letterSpacing: 0.5,
+    },
+    miniScanLine: {
+        width: 40,
+        height: 2,
+        backgroundColor: "#e2e8f0",
+        borderRadius: 1,
+        marginHorizontal: 10,
+    },
+    miniScanLineDone: {
+        backgroundColor: "#16a34a",
     },
 
     /* ── Card Footer ── */

@@ -10,6 +10,10 @@ const studentSchema = new mongoose.Schema({
   course: String,
   branch: String,
   email: String,
+  phone: {
+    type: String,
+    default: "",
+  },
   gender: String,
   password: String,
 

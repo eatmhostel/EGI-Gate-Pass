@@ -183,9 +183,16 @@ exports.verifyScan = async (req, res) => {
         const cur = gatePass.gateStatus;
         let action = !cur || cur === "enter" ? "exit" : "enter";
 
-        // 7. Update pass
+        // ✅ 7. Update pass with explicit scan fields
         gatePass.gateStatus = action;
-        if (action === "enter") gatePass.status = "completed";
+        if (action === "exit") {
+            gatePass.scannedOut = true;
+            gatePass.scannedOutAt = new Date();
+        } else if (action === "enter") {
+            gatePass.scannedIn = true;
+            gatePass.scannedInAt = new Date();
+            gatePass.status = "completed";
+        }
         await gatePass.save();
 
         // 8. Record scan
@@ -219,6 +226,11 @@ exports.verifyScan = async (req, res) => {
                 destination: gatePass.destination,
                 validUntil: gatePass.validUntil,
                 outTime: gatePass.outTime,
+                scannedOut: gatePass.scannedOut,
+                scannedIn: gatePass.scannedIn,
+                scannedOutAt: gatePass.scannedOutAt,
+                scannedInAt: gatePass.scannedInAt,
+                status: gatePass.status,
             },
             scannedAt: scan.createdAt,
         });
@@ -230,9 +242,13 @@ exports.verifyScan = async (req, res) => {
 // ── SCAN HISTORY ─────────────────────────────────────────────
 exports.getHistory = async (req, res) => {
     try {
-        const { filter = "all", limit = 50, page = 1 } = req.query;
+        const { filter = "all", limit = 50, page = 1, scannedBy } = req.query;
 
         let query = {};
+        
+        // ✅ Filter by specific security guard
+        if (scannedBy) query.scannedBy = scannedBy;
+
         if (filter === "denied") {
             query.status = "denied";
         } else if (filter === "exit" || filter === "enter") {
@@ -269,7 +285,6 @@ exports.getTodayStats = async (req, res) => {
         start.setHours(0, 0, 0, 0);
         const $gte = { $gte: start };
 
-        // If ?scannedBy=Rahul → only that guard's scans
         const scannedBy = req.query.scannedBy;
         let base = { createdAt: $gte };
         if (scannedBy) base.scannedBy = scannedBy;
@@ -280,7 +295,6 @@ exports.getTodayStats = async (req, res) => {
             SecurityScan.countDocuments({ ...base, status: "denied" }),
         ]);
 
-        // Students who exited but NOT yet entered back
         const activeOutside = await GatePass.countDocuments({
             status: "approved",
             gateStatus: "exit",
@@ -292,7 +306,8 @@ exports.getTodayStats = async (req, res) => {
                 exits,
                 entries,
                 denied,
-                total: exits + entries + denied,
+                passed: exits + entries,     // ✅ Only students who actually passed
+                total: exits + entries + denied, // ✅ All scan events (used for Profile's "My QR Scans")
                 activeOutside,
             },
         });

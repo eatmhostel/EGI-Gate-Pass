@@ -25,6 +25,12 @@ const gatePassSchema = new mongoose.Schema(
             default: null,
         },
 
+        // ✅ NEW — explicit scan booleans + timestamps
+        scannedOut: { type: Boolean, default: false },
+        scannedOutAt: { type: Date, default: null },
+        scannedIn: { type: Boolean, default: false },
+        scannedInAt: { type: Date, default: null },
+
         qrData: String,
         validUntil: Date,
     },

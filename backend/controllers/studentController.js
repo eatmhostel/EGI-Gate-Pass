@@ -4,7 +4,8 @@ const bcrypt = require("bcryptjs");
 // ✅ REGISTER
 exports.registerStudent = async (req, res) => {
   try {
-    const { regNo, fullName, course, branch, email, gender, password } = req.body;
+    const { regNo, fullName, course, branch, email, phone, gender, password } = req.body;
+
     const existing = await Student.findOne({ regNo });
     if (existing) {
       return res.json({ success: false, message: "User already exists" });
@@ -18,6 +19,7 @@ exports.registerStudent = async (req, res) => {
       course,
       branch,
       email,
+      phone,
       gender,
       password: hashedPassword,
     });
@@ -57,6 +59,7 @@ exports.loginStudent = async (req, res) => {
     if (!isMatch) {
       return res.json({ success: false, message: "Wrong password" });
     }
+
     res.json({
       success: true,
       user: {
@@ -66,6 +69,7 @@ exports.loginStudent = async (req, res) => {
         course: student.course,
         branch: student.branch,
         email: student.email,
+        phone: student.phone,
       },
     });
   } catch (err) {

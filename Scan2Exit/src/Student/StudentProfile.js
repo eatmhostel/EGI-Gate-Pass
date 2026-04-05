@@ -14,15 +14,16 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/FooterStudent";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { EXPO_PUBLIC_API_URL } from "@env";
+import { useNavigation } from "@react-navigation/native";
 
 export default function StudentProfile() {
-    const { user } = useContext(AuthContext);
-    
+    const { user, setUser } = useContext(AuthContext);
+    const [showMenu, setShowMenu] = useState(false);
+    const navigation = useNavigation();
     const [totalPasses, setTotalPasses] = useState(0);
     const [hasActivePass, setHasActivePass] = useState(false);
     const [loadingStats, setLoadingStats] = useState(true);
 
-    // ✅ Fetch real-time stats on mount
     useEffect(() => {
         const fetchStats = async () => {
             try {
@@ -45,6 +46,14 @@ export default function StudentProfile() {
 
         fetchStats();
     }, []);
+
+    const formatPhone = (phone) => {
+        if (!phone) return "Not provided";
+        if (phone.length === 10) {
+            return `+91 ${phone.slice(0, 5)} ${phone.slice(5)}`;
+        }
+        return phone;
+    };
 
     return (
         <View style={styles.container}>
@@ -91,7 +100,7 @@ export default function StudentProfile() {
 
                     <View style={[styles.activeBox, !hasActivePass && !loadingStats && styles.activeBoxInactive]}>
                         <Text style={[styles.statLabel, !hasActivePass && styles.statLabelInactive]}>ACTIVE PASS</Text>
-                        
+
                         {loadingStats ? (
                             <ActivityIndicator size="small" color={hasActivePass ? "#1b6d24" : "#666"} />
                         ) : (
@@ -99,10 +108,10 @@ export default function StudentProfile() {
                                 {hasActivePass ? "YES" : "NO"}
                             </Text>
                         )}
-                        
+
                         <Text style={[styles.activeSub, !hasActivePass && styles.activeSubInactive]}>
-                            {hasActivePass 
-                                ? "Current gate pass is valid for exit" 
+                            {hasActivePass
+                                ? "Current gate pass is valid for exit"
                                 : "No active gate pass right now"}
                         </Text>
                     </View>
@@ -138,6 +147,15 @@ export default function StudentProfile() {
                         <Text style={styles.label}>Institutional Email</Text>
                         <Text style={styles.email}>{user?.email}</Text>
                     </View>
+
+                    {/* ✅ MOBILE NUMBER - NEW */}
+                    <View style={styles.infoBlock}>
+                        <Text style={styles.label}>Mobile Number</Text>
+                        <View style={styles.phoneRow}>
+                            <MaterialIcons name="phone-android" size={16} color="#0040a1" />
+                            <Text style={styles.phone}>{formatPhone(user?.phone)}</Text>
+                        </View>
+                    </View>
                 </View>
 
                 {/* Actions */}
@@ -158,7 +176,16 @@ export default function StudentProfile() {
                         </TouchableOpacity>
                     ))}
 
-                    <TouchableOpacity style={styles.logoutBtn}>
+                    <TouchableOpacity style={styles.logoutBtn} onPress={() => {
+                        setUser(null);
+                        setShowMenu(false);
+
+                        // ✅ RESET navigation (IMPORTANT)
+                        navigation.reset({
+                            index: 0,
+                            routes: [{ name: "Home" }],
+                        });
+                    }}>
                         <MaterialIcons name="logout" size={20} color="#ba1a1a" />
                         <Text style={styles.logoutText}>Logout Account</Text>
                     </TouchableOpacity>
@@ -381,6 +408,19 @@ const styles = StyleSheet.create({
         color: "#0040a1",
         fontWeight: "600",
         fontSize: 14,
+    },
+
+    // ✅ Phone styles
+    phoneRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    phone: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#1a237e",
+        letterSpacing: 0.5,
     },
 
     row: {

@@ -193,10 +193,10 @@ export default function StudentDashboard() {
                         })
                     )}
 
-                    <View style={styles.viewAllContainer}>
+                    <TouchableOpacity style={styles.viewAllContainer} onPress={() => navigation.navigate("History")}>
                         <Text style={styles.viewAllText}>View All Requests</Text>
                         <MaterialIcons name="arrow-forward" size={18} color="#0040a1" />
-                    </View>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Policy */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
     View,
     Text,
@@ -8,6 +8,7 @@ import {
     StatusBar,
     ActivityIndicator,
     RefreshControl,
+    Animated,
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -35,16 +36,38 @@ const getInitials = (name) =>
               .slice(0, 2)
         : "?";
 
+/* ── Animated Pulse Dot ────────────────────────────── */
+function LiveDot() {
+    const pulse = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulse, { toValue: 0.3, duration: 600, useNativeDriver: true }),
+                Animated.timing(pulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [pulse]);
+
+    return (
+        <Animated.View style={[styles.liveDot, { opacity: pulse }]} />
+    );
+}
+
 export default function SecurityDashboard() {
     const navigation = useNavigation();
     const [stats, setStats] = useState(null);
     const [recentScans, setRecentScans] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [isLive, setIsLive] = useState(false);
+    const intervalRef = useRef(null);
 
     const fetchData = useCallback(async (isRefresh = false) => {
         if (isRefresh) setRefreshing(true);
-        else setLoading(true);
+        else if (!stats) setLoading(true); // Only show spinner on initial load
 
         try {
             const [sRes, hRes] = await Promise.all([
@@ -59,16 +82,30 @@ export default function SecurityDashboard() {
 
             if (sData.success) setStats(sData.stats);
             if (hData.success) setRecentScans(hData.scans);
+            
+            setIsLive(true);
         } catch (err) {
             console.log("Dashboard fetch error:", err);
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [stats]);
 
+    // ✅ Initial load
     useEffect(() => {
         fetchData();
+    }, [fetchData]);
+
+    // ✅ Polling — every 4 seconds
+    useEffect(() => {
+        intervalRef.current = setInterval(() => {
+            fetchData();
+        }, 4000);
+
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
     }, [fetchData]);
 
     return (
@@ -151,8 +188,19 @@ export default function SecurityDashboard() {
                     />
                 ) : stats ? (
                     <>
+                        {/* ✅ Section Header with Live Indicator */}
+                        <View style={styles.statsSectionHeader}>
+                            <Text style={styles.statsSectionTitle}>Today's Activity</Text>
+                            {isLive && (
+                                <View style={styles.liveChip}>
+                                    <LiveDot />
+                                    <Text style={styles.liveChipText}>LIVE</Text>
+                                </View>
+                            )}
+                        </View>
+
                         <View style={styles.row}>
-                            {/* Passes Today */}
+                            {/* ✅ Passes Today (Total who passed) */}
                             <View style={styles.statBoxGreen}>
                                 <View style={styles.statHeader}>
                                     <MaterialIcons
@@ -161,11 +209,11 @@ export default function SecurityDashboard() {
                                         color="#006633"
                                     />
                                     <Text style={styles.statLabel}>
-                                        Passes Today
+                                        Passed Gate
                                     </Text>
                                 </View>
                                 <Text style={styles.statNumber}>
-                                    {stats.total}
+                                    {stats.passed}
                                 </Text>
                                 <View style={styles.statBar}>
                                     <View
@@ -173,8 +221,8 @@ export default function SecurityDashboard() {
                                             styles.statBarFill,
                                             {
                                                 width:
-                                                    stats.total > 0
-                                                        ? `${Math.min((stats.exits / Math.max(stats.total, 1)) * 100, 100)}%`
+                                                    stats.passed > 0
+                                                        ? `${Math.min((stats.exits / Math.max(stats.passed, 1)) * 100, 100)}%`
                                                         : "0%",
                                             },
                                         ]}
@@ -376,6 +424,31 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
 
+    /* ── Live Chip ──────────────────────────────────── */
+    liveChip: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#dcfce7",
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: "#bbf7d0",
+    },
+    liveDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: "#16a34a",
+        marginRight: 4,
+    },
+    liveChipText: {
+        fontSize: 9,
+        fontWeight: "800",
+        color: "#16a34a",
+        letterSpacing: 0.8,
+    },
+
     /* ── Card ─────────────────────────────────────────── */
     card: {
         backgroundColor: "#fff",
@@ -463,6 +536,19 @@ const styles = StyleSheet.create({
         color: "#1a237e",
         fontWeight: "600",
         fontSize: 15,
+    },
+
+    /* ── Stats Section ───────────────────────────────── */
+    statsSectionHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 12,
+    },
+    statsSectionTitle: {
+        fontSize: 18,
+        fontWeight: "bold",
+        color: "#1a237e",
     },
 
     /* ── Stat Boxes ───────────────────────────────────── */

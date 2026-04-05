@@ -4,13 +4,14 @@ import {
     StyleSheet,
     ScrollView,
     ActivityIndicator,
-    SafeAreaView,
+    Animated,
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from "@expo/vector-icons";
 import Navbar from "../components/Navbar";
 import Footer from "../components/FooterStudent";
 import QRCode from "react-native-qrcode-svg";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { EXPO_PUBLIC_API_URL } from "@env";
 import { useRoute } from "@react-navigation/native";
 
@@ -27,17 +28,6 @@ function formatDateTime(dateStr) {
     });
 }
 
-function formatTime(dateStr) {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString("en-IN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-    });
-}
-
-// ✅ Safe client-side expiry check as fallback
 function clientSideExpired(validUntil) {
     if (!validUntil) return false;
     try {
@@ -58,7 +48,7 @@ function InfoTile({ icon, label, value }) {
             <View style={styles.infoTileContent}>
                 <Text style={styles.infoTileLabel}>{label}</Text>
                 <Text style={styles.infoTileValue} numberOfLines={1}>
-                    {value}
+                    {value || "—"}
                 </Text>
             </View>
         </View>
@@ -75,71 +65,221 @@ function MetaRow({ icon, label, value }) {
     );
 }
 
+function ScanStatusBadge({ scanned, label, time }) {
+    return (
+        <View style={[styles.scanBadge, scanned && styles.scanBadgeDone]}>
+            <MaterialIcons
+                name={scanned ? "check-circle" : "radio-button-unchecked"}
+                size={16}
+                color={scanned ? "#16a34a" : "#94a3b8"}
+            />
+            <View style={styles.scanBadgeContent}>
+                <Text style={[styles.scanBadgeLabel, scanned && styles.scanBadgeLabelDone]}>
+                    {label}
+                </Text>
+                {time ? (
+                    <Text style={styles.scanBadgeTime}>{time}</Text>
+                ) : (
+                    <Text style={styles.scanBadgeWaiting}>Waiting</Text>
+                )}
+            </View>
+        </View>
+    );
+}
+
+function LivePulse() {
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, {
+                    toValue: 0.4,
+                    duration: 800,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 800,
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [pulseAnim]);
+
+    return (
+        <View style={styles.liveIndicator}>
+            <Animated.View
+                style={[
+                    styles.liveDot,
+                    { opacity: pulseAnim },
+                ]}
+            />
+            <Text style={styles.liveText}>LIVE TRACKING</Text>
+        </View>
+    );
+}
+
 export default function RequestSuccess() {
     const [requestData, setRequestData] = useState(null);
     const [student, setStudent] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [pollingCount, setPollingCount] = useState(0);
+    const [justCompleted, setJustCompleted] = useState(false);
+    const blurAnim = useRef(new Animated.Value(0)).current;
+    const intervalRef = useRef(null);
+    const prevStatusRef = useRef(null);
 
     const route = useRoute();
     const { requestId } = route.params;
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const res = await fetch(
-                    `${EXPO_PUBLIC_API_URL}/gatepass/${requestId}`
-                );
+    // ✅ Fetch data
+    const fetchData = useCallback(async () => {
+        try {
+            const res = await fetch(
+                `${EXPO_PUBLIC_API_URL}/gatepass/${requestId}`
+            );
 
-                if (!res.ok) {
-                    const text = await res.text();
-                    console.log("SERVER ERROR:", text);
-                    return;
+            if (!res.ok) return;
+
+            const data = await res.json();
+
+            if (data.success) {
+                const req = data.request;
+
+                // ✅ Detect transition to completed
+                if (
+                    prevStatusRef.current &&
+                    prevStatusRef.current !== "completed" &&
+                    req.status === "completed"
+                ) {
+                    setJustCompleted(true);
+                    // Animate blur in
+                    Animated.timing(blurAnim, {
+                        toValue: 10,
+                        duration: 600,
+                        useNativeDriver: true,
+                    }).start();
                 }
 
-                const data = await res.json();
-
-                if (data.success) {
-                    setRequestData(data.request);
-                    setStudent(data.request.student);
-                }
-            } catch (err) {
-                console.log("ERROR:", err);
-            } finally {
-                setLoading(false);
+                prevStatusRef.current = req.status;
+                setRequestData(req);
+                setStudent(req.student);
+                setPollingCount((c) => c + 1);
             }
-        };
-
-        if (requestId) {
-            fetchData();
+        } catch (err) {
+            console.log("POLL ERROR:", err);
         }
     }, [requestId]);
 
-    // ✅ Use backend isExpired first, fallback to client-side check
-    const isExpired =
-        requestData?.isExpired === true ||
-        (requestData?.isExpired !== false &&
-            clientSideExpired(requestData?.validUntil));
+    // ✅ Initial fetch
+    useEffect(() => {
+        const init = async () => {
+            setLoading(true);
+            await fetchData();
+            setLoading(false);
+        };
+        if (requestId) init();
+    }, [requestId, fetchData]);
 
-    const isActive = !isExpired && requestData?.status === "approved";
+    // ✅ Polling — only when active
+    useEffect(() => {
+        if (!requestData) return;
+
+        const isActive = requestData.status === "approved";
+        const isCompleted = requestData.status === "completed";
+        const isExpired =
+            requestData.status === "expired" ||
+            (requestData.status === "approved" &&
+                clientSideExpired(requestData.validUntil));
+
+        // Stop polling if completed, expired, rejected, or pending
+        if (!isActive || isCompleted || isExpired) {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+
+            // If already completed/expired on first load, set blur immediately
+            if ((isCompleted || isExpired) && blurAnim._value === 0) {
+                Animated.timing(blurAnim, {
+                    toValue: 10,
+                    duration: 0,
+                    useNativeDriver: true,
+                }).start();
+            }
+            return;
+        }
+
+        // Start polling every 3 seconds
+        if (!intervalRef.current) {
+            intervalRef.current = setInterval(fetchData, 3000);
+        }
+
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        };
+    }, [requestData?.status, requestData?.validUntil, fetchData]);
+
+    // ✅ Derived states
+    const scannedOut = requestData?.scannedOut === true;
+    const scannedIn = requestData?.scannedIn === true;
+    const isCompleted = scannedIn && scannedOut;
+
+    const isTimeExpired =
+        requestData?.status === "expired" ||
+        (requestData?.status !== "expired" &&
+            requestData?.status !== "completed" &&
+            clientSideExpired(requestData?.validUntil));
+    const isExpired = isTimeExpired && !isCompleted;
+
+    const isActive = !isCompleted && !isExpired && requestData?.status === "approved";
     const isPending = requestData?.status === "pending";
     const isRejected = requestData?.status === "rejected";
 
+    const displayState = isCompleted
+        ? "completed"
+        : isExpired
+        ? "expired"
+        : isPending
+        ? "pending"
+        : isRejected
+        ? "rejected"
+        : "active";
+
+    const isQrDisabled = isCompleted || isExpired || isPending || isRejected;
+    const shouldPoll = isActive;
+
+    const formatScanTime = (dateStr) => {
+        if (!dateStr) return null;
+        const d = new Date(dateStr);
+        return d.toLocaleTimeString("en-IN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+        });
+    };
+
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
             <View style={styles.container}>
                 <Navbar />
 
                 <ScrollView
                     contentContainerStyle={styles.scroll}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
                 >
                     {/* Loading State */}
                     {loading && (
                         <View style={styles.centerBox}>
-                            <ActivityIndicator
-                                size="large"
-                                color="#7c3aed"
-                            />
+                            <ActivityIndicator size="large" color="#7c3aed" />
                             <Text style={styles.loadingText}>
                                 Loading pass details...
                             </Text>
@@ -149,119 +289,119 @@ export default function RequestSuccess() {
                     {/* Main Content */}
                     {!loading && requestData && student && (
                         <>
-                            {/* ✅ Status Banner — changes color per state */}
+                            {/* ✅ Status Banner */}
                             <View
                                 style={[
                                     styles.statusBanner,
-                                    isExpired && styles.statusBannerExpired,
-                                    isPending && styles.statusBannerPending,
-                                    isRejected && styles.statusBannerRejected,
+                                    displayState === "completed" && styles.statusBannerCompleted,
+                                    displayState === "expired" && styles.statusBannerExpired,
+                                    displayState === "pending" && styles.statusBannerPending,
+                                    displayState === "rejected" && styles.statusBannerRejected,
                                 ]}
                             >
                                 <View
                                     style={[
                                         styles.statusBannerDot,
-                                        isExpired &&
-                                            styles.statusBannerDotExpired,
-                                        isPending &&
-                                            styles.statusBannerDotPending,
-                                        isRejected &&
-                                            styles.statusBannerDotRejected,
+                                        displayState === "completed" && styles.statusBannerDotCompleted,
+                                        displayState === "expired" && styles.statusBannerDotExpired,
+                                        displayState === "pending" && styles.statusBannerDotPending,
+                                        displayState === "rejected" && styles.statusBannerDotRejected,
+                                        shouldPoll && styles.statusBannerDotPulse,
                                     ]}
                                 />
                                 <Text
                                     style={[
                                         styles.statusBannerText,
-                                        isExpired &&
-                                            styles.statusBannerTextExpired,
-                                        isPending &&
-                                            styles.statusBannerTextPending,
-                                        isRejected &&
-                                            styles.statusBannerTextRejected,
+                                        displayState === "completed" && styles.statusBannerTextCompleted,
+                                        displayState === "expired" && styles.statusBannerTextExpired,
+                                        displayState === "pending" && styles.statusBannerTextPending,
+                                        displayState === "rejected" && styles.statusBannerTextRejected,
                                     ]}
                                 >
-                                    {isExpired
+                                    {displayState === "completed"
+                                        ? "PASS COMPLETED"
+                                        : displayState === "expired"
                                         ? "PASS EXPIRED"
-                                        : isPending
+                                        : displayState === "pending"
                                         ? "AWAITING APPROVAL"
-                                        : isRejected
+                                        : displayState === "rejected"
                                         ? "PASS REJECTED"
                                         : "PASS IS ACTIVE"}
                                 </Text>
+
+                                {/* ✅ Live indicator when polling */}
+                                {shouldPoll && <LivePulse />}
                             </View>
 
                             {/* Header */}
                             <View style={styles.headerSection}>
                                 <Text style={styles.title}>Gate Access Pass</Text>
                                 <Text style={styles.subtitle}>
-                                    {isActive
-                                        ? "Present this QR code at the security terminal for scanning."
-                                        : isExpired
+                                    {displayState === "completed"
+                                        ? "Entry and exit both recorded. This pass is now complete."
+                                        : displayState === "expired"
                                         ? "This pass has passed its validity window."
-                                        : isPending
+                                        : displayState === "pending"
                                         ? "Your request is being reviewed by the administration."
-                                        : "This gatepass request was not approved."}
+                                        : displayState === "rejected"
+                                        ? "This gatepass request was not approved."
+                                        : "Present this QR code at the security terminal for scanning."}
                                 </Text>
                             </View>
 
                             {/* Pass Card */}
                             <View style={styles.passCard}>
-                                {/* Card Top Accent — color per state */}
+                                {/* Card Top Accent */}
                                 <View
                                     style={[
                                         styles.passCardAccent,
-                                        isExpired &&
-                                            styles.passCardAccentExpired,
-                                        isPending &&
-                                            styles.passCardAccentPending,
-                                        isRejected &&
-                                            styles.passCardAccentRejected,
+                                        displayState === "completed" && styles.passCardAccentCompleted,
+                                        displayState === "expired" && styles.passCardAccentExpired,
+                                        displayState === "pending" && styles.passCardAccentPending,
+                                        displayState === "rejected" && styles.passCardAccentRejected,
                                     ]}
                                 />
 
                                 {/* Card Header */}
                                 <View style={styles.passCardHeader}>
                                     <View>
-                                        <Text style={styles.passIdLabel}>
-                                            PASS ID
-                                        </Text>
+                                        <Text style={styles.passIdLabel}>PASS ID</Text>
                                         <Text style={styles.passIdValue}>
-                                            #
-                                            {requestData._id
-                                                .slice(-6)
-                                                .toUpperCase()}
+                                            #{requestData._id.slice(-6).toUpperCase()}
                                         </Text>
                                     </View>
 
-                                    {/* ✅ Status Badge — color per state */}
+                                    {/* Status Badge */}
                                     <View
                                         style={[
                                             styles.statusBadge,
-                                            isExpired &&
-                                                styles.statusBadgeExpired,
-                                            isPending &&
-                                                styles.statusBadgePending,
-                                            isRejected &&
-                                                styles.statusBadgeRejected,
+                                            displayState === "completed" && styles.statusBadgeCompleted,
+                                            displayState === "expired" && styles.statusBadgeExpired,
+                                            displayState === "pending" && styles.statusBadgePending,
+                                            displayState === "rejected" && styles.statusBadgeRejected,
                                         ]}
                                     >
                                         <MaterialIcons
                                             name={
-                                                isExpired
+                                                displayState === "completed"
+                                                    ? "task-alt"
+                                                    : displayState === "expired"
                                                     ? "cancel"
-                                                    : isPending
+                                                    : displayState === "pending"
                                                     ? "hourglass-top"
-                                                    : isRejected
+                                                    : displayState === "rejected"
                                                     ? "highlight-off"
                                                     : "check-circle"
                                             }
                                             size={14}
                                             color={
-                                                isExpired
+                                                displayState === "completed"
+                                                    ? "#6366f1"
+                                                    : displayState === "expired"
                                                     ? "#64748b"
-                                                    : isPending
+                                                    : displayState === "pending"
                                                     ? "#ca8a04"
-                                                    : isRejected
+                                                    : displayState === "rejected"
                                                     ? "#dc2626"
                                                     : "#16a34a"
                                             }
@@ -269,19 +409,19 @@ export default function RequestSuccess() {
                                         <Text
                                             style={[
                                                 styles.statusBadgeText,
-                                                isExpired &&
-                                                    styles.statusBadgeTextExpired,
-                                                isPending &&
-                                                    styles.statusBadgeTextPending,
-                                                isRejected &&
-                                                    styles.statusBadgeTextRejected,
+                                                displayState === "completed" && styles.statusBadgeTextCompleted,
+                                                displayState === "expired" && styles.statusBadgeTextExpired,
+                                                displayState === "pending" && styles.statusBadgeTextPending,
+                                                displayState === "rejected" && styles.statusBadgeTextRejected,
                                             ]}
                                         >
-                                            {isExpired
+                                            {displayState === "completed"
+                                                ? "Completed"
+                                                : displayState === "expired"
                                                 ? "Expired"
-                                                : isPending
+                                                : displayState === "pending"
                                                 ? "Pending"
-                                                : isRejected
+                                                : displayState === "rejected"
                                                 ? "Rejected"
                                                 : "Active"}
                                         </Text>
@@ -291,13 +431,17 @@ export default function RequestSuccess() {
                                 {/* Divider */}
                                 <View style={styles.cardDivider} />
 
-                                {/* QR Code */}
+                                {/* ✅ QR Code with BLUR */}
                                 <View style={styles.qrWrap}>
                                     <View style={styles.qrContainer}>
-                                        <View
-                                            style={{
-                                                opacity: isExpired ? 0.25 : 1,
-                                            }}
+                                        {/* QR with animated blur */}
+                                        <Animated.View
+                                            style={[
+                                                styles.qrInnerWrap,
+                                                {
+                                                    opacity: isQrDisabled ? 0.15 : 1,
+                                                },
+                                            ]}
                                         >
                                             <QRCode
                                                 value={requestData.qrData}
@@ -305,22 +449,75 @@ export default function RequestSuccess() {
                                                 color="#1e1b4b"
                                                 backgroundColor="#ffffff"
                                             />
-                                        </View>
+                                        </Animated.View>
 
-                                        {isExpired && (
-                                            <View
-                                                style={styles.expiredOverlay}
-                                            >
-                                                <Text
-                                                    style={styles.expiredText}
-                                                >
-                                                    EXPIRED
+                                        {/* ✅ COMPLETED Overlay with blur feel */}
+                                        {isCompleted && (
+                                            <View style={styles.completedOverlay}>
+                                                <View style={styles.completedOverlayIconWrap}>
+                                                    <MaterialIcons
+                                                        name="task-alt"
+                                                        size={36}
+                                                        color="#6366f1"
+                                                    />
+                                                </View>
+                                                <Text style={styles.completedOverlayTitle}>
+                                                    COMPLETED
                                                 </Text>
+                                                <Text style={styles.completedOverlaySub}>
+                                                    Exit & Entry Recorded
+                                                </Text>
+                                                <View style={styles.completedOverlayTimes}>
+                                                    <Text style={styles.completedOverlayTimeText}>
+                                                        Out: {formatScanTime(requestData?.scannedOutAt)}
+                                                    </Text>
+                                                    <Text style={styles.completedOverlayTimeText}>
+                                                        In: {formatScanTime(requestData?.scannedInAt)}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        )}
+
+                                        {/* EXPIRED Overlay */}
+                                        {isExpired && (
+                                            <View style={styles.expiredOverlay}>
+                                                <MaterialIcons
+                                                    name="schedule"
+                                                    size={28}
+                                                    color="#dc2626"
+                                                />
+                                                <Text style={styles.expiredOverlayTitle}>EXPIRED</Text>
+                                            </View>
+                                        )}
+
+                                        {/* PENDING Overlay */}
+                                        {isPending && (
+                                            <View style={styles.pendingOverlay}>
+                                                <MaterialIcons
+                                                    name="hourglass-top"
+                                                    size={28}
+                                                    color="#ca8a04"
+                                                />
+                                                <Text style={styles.pendingOverlayTitle}>PENDING</Text>
+                                            </View>
+                                        )}
+
+                                        {/* REJECTED Overlay */}
+                                        {isRejected && (
+                                            <View style={styles.rejectedOverlay}>
+                                                <MaterialIcons
+                                                    name="highlight-off"
+                                                    size={28}
+                                                    color="#dc2626"
+                                                />
+                                                <Text style={styles.rejectedOverlayTitle}>REJECTED</Text>
                                             </View>
                                         )}
                                     </View>
                                     <Text style={styles.qrHint}>
-                                        {isExpired
+                                        {isCompleted
+                                            ? "Pass has been fully used"
+                                            : isExpired
                                             ? "This pass is no longer valid"
                                             : isPending
                                             ? "QR will activate after approval"
@@ -333,103 +530,151 @@ export default function RequestSuccess() {
                                 {/* Divider */}
                                 <View style={styles.cardDivider} />
 
+                                {/* ✅ Scan Status Tracker */}
+                                {!isPending && !isRejected && (
+                                    <View style={styles.scanTracker}>
+                                        <View style={styles.scanTrackerHeader}>
+                                            <Text style={styles.scanTrackerTitle}>
+                                                Scan Progress
+                                            </Text>
+                                            {shouldPoll && (
+                                                <View style={styles.scanTrackerLive}>
+                                                    <View style={styles.scanTrackerLiveDot} />
+                                                    <Text style={styles.scanTrackerLiveText}>
+                                                        Live
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
+
+                                        <View style={styles.scanTrackerRow}>
+                                            <ScanStatusBadge
+                                                scanned={scannedOut}
+                                                label="Exit Scan"
+                                                time={formatScanTime(requestData?.scannedOutAt)}
+                                            />
+
+                                            {/* Connector Line */}
+                                            <View style={styles.scanTrackerLine}>
+                                                <View
+                                                    style={[
+                                                        styles.scanTrackerLineFill,
+                                                        scannedOut &&
+                                                            styles.scanTrackerLineFillHalf,
+                                                        scannedIn &&
+                                                            styles.scanTrackerLineFillFull,
+                                                    ]}
+                                                />
+                                            </View>
+
+                                            <ScanStatusBadge
+                                                scanned={scannedIn}
+                                                label="Entry Scan"
+                                                time={formatScanTime(requestData?.scannedInAt)}
+                                            />
+                                        </View>
+
+                                        {/* ✅ Step descriptions */}
+                                        <View style={styles.scanStepDesc}>
+                                            <Text style={styles.scanStepText}>
+                                                {scannedOut
+                                                    ? "Student exited campus"
+                                                    : "Waiting for exit scan"}
+                                            </Text>
+                                            <Text style={styles.scanStepText}>
+                                                {scannedIn
+                                                    ? "Student entered campus"
+                                                    : scannedOut
+                                                    ? "Waiting for return"
+                                                    : "—"}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                )}
+
+                                {/* Divider */}
+                                {!isPending && !isRejected && <View style={styles.cardDivider} />}
+
                                 {/* Student Info Grid */}
                                 <View style={styles.infoGrid}>
-                                    <InfoTile
-                                        icon="person"
-                                        label="Name"
-                                        value={student.fullName}
-                                    />
-                                    <InfoTile
-                                        icon="badge"
-                                        label="Regd No"
-                                        value={student.regNo}
-                                    />
-                                    <InfoTile
-                                        icon="school"
-                                        label="Course"
-                                        value={student.course}
-                                    />
-                                    <InfoTile
-                                        icon="engineering"
-                                        label="Branch"
-                                        value={student.branch}
-                                    />
-                                    <InfoTile
-                                        icon="location-on"
-                                        label="Destination"
-                                        value={requestData.destination}
-                                    />
-                                    <InfoTile
-                                        icon="flag"
-                                        label="Purpose"
-                                        value={
-                                            requestData.purpose || "General"
-                                        }
-                                    />
+                                    <InfoTile icon="person" label="Name" value={student.fullName} />
+                                    <InfoTile icon="badge" label="Regd No" value={student.regNo} />
+                                    <InfoTile icon="call" label="Mobile" value={student.phone} />
+                                    <InfoTile icon="school" label="Course" value={student.course} />
+                                    <InfoTile icon="engineering" label="Branch" value={student.branch} />
+                                    <InfoTile icon="location-on" label="Destination" value={requestData.destination} />
+                                    <InfoTile icon="flag" label="Purpose" value={requestData.purpose || "General"} />
                                 </View>
                             </View>
 
                             {/* Timing Details */}
                             <View style={styles.timingCard}>
-                                <Text style={styles.timingTitle}>
-                                    Schedule Details
-                                </Text>
+                                <Text style={styles.timingTitle}>Schedule Details</Text>
 
-                                <MetaRow
-                                    icon="schedule"
-                                    label="Out Time"
-                                    value={formatDateTime(requestData.outTime)}
-                                />
+                                <MetaRow icon="schedule" label="Out Time" value={formatDateTime(requestData.outTime)} />
                                 <View style={styles.timingDivider} />
-                                <MetaRow
-                                    icon="event"
-                                    label="Return Time"
-                                    value={formatDateTime(
-                                        requestData.returnTime
-                                    )}
-                                />
+                                <MetaRow icon="event" label="Return Time" value={formatDateTime(requestData.returnTime)} />
                                 <View style={styles.timingDivider} />
-                                <MetaRow
-                                    icon="history"
-                                    label="Requested On"
-                                    value={formatDateTime(
-                                        requestData.createdAt
-                                    )}
-                                />
+                                <MetaRow icon="history" label="Requested On" value={formatDateTime(requestData.createdAt)} />
                                 <View style={styles.timingDivider} />
-                                <MetaRow
-                                    icon="timer"
-                                    label="Valid Until"
-                                    value={formatDateTime(
-                                        requestData.validUntil
-                                    )}
-                                />
+                                <MetaRow icon="timer" label="Valid Until" value={formatDateTime(requestData.validUntil)} />
+
+                                {requestData?.scannedOutAt && (
+                                    <>
+                                        <View style={styles.timingDivider} />
+                                        <MetaRow
+                                            icon="logout"
+                                            label="Scanned Out"
+                                            value={formatDateTime(requestData.scannedOutAt)}
+                                        />
+                                    </>
+                                )}
+                                {requestData?.scannedInAt && (
+                                    <>
+                                        <View style={styles.timingDivider} />
+                                        <MetaRow
+                                            icon="login"
+                                            label="Scanned In"
+                                            value={formatDateTime(requestData.scannedInAt)}
+                                        />
+                                    </>
+                                )}
                             </View>
 
-                            {/* Reason (if exists) */}
+                            {/* Reason */}
                             {requestData.reason && (
                                 <View style={styles.reasonCard}>
-                                    <Text style={styles.reasonTitle}>
-                                        Reason
-                                    </Text>
-                                    <Text style={styles.reasonText}>
-                                        {requestData.reason}
+                                    <Text style={styles.reasonTitle}>Reason</Text>
+                                    <Text style={styles.reasonText}>{requestData.reason}</Text>
+                                </View>
+                            )}
+
+                            {/* ✅ Just Completed Celebration */}
+                            {justCompleted && (
+                                <View style={styles.celebrationBox}>
+                                    <MaterialIcons name="celebration" size={20} color="#6366f1" />
+                                    <Text style={styles.celebrationText}>
+                                        Your gatepass journey is complete! You've safely returned to campus.
                                     </Text>
                                 </View>
                             )}
 
-                            {/* Footer Note */}
+                            {/* ✅ Completed Note */}
+                            {isCompleted && !justCompleted && (
+                                <View style={styles.completedNoteBox}>
+                                    <MaterialIcons name="verified" size={18} color="#6366f1" />
+                                    <Text style={styles.completedNoteText}>
+                                        This gatepass has been successfully used for both exit and entry.
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* Active Note */}
                             {isActive && (
                                 <View style={styles.noteBox}>
-                                    <MaterialIcons
-                                        name="info-outline"
-                                        size={16}
-                                        color="#8b8ba7"
-                                    />
+                                    <MaterialIcons name="info-outline" size={16} color="#8b8ba7" />
                                     <Text style={styles.noteText}>
-                                        This pass is digitally verified. Do not
-                                        share a screenshot.
+                                        This pass updates automatically. Do not share a screenshot — the QR may be rescanned.
                                     </Text>
                                 </View>
                             )}
@@ -440,16 +685,11 @@ export default function RequestSuccess() {
                     {!loading && !requestData && (
                         <View style={styles.centerBox}>
                             <View style={styles.errorIconWrap}>
-                                <MaterialIcons
-                                    name="error-outline"
-                                    size={40}
-                                    color="#dc2626"
-                                />
+                                <MaterialIcons name="error-outline" size={40} color="#dc2626" />
                             </View>
                             <Text style={styles.errorTitle}>Pass Not Found</Text>
                             <Text style={styles.errorSubtitle}>
-                                The requested gatepass could not be loaded.
-                                Please try again.
+                                The requested gatepass could not be loaded. Please try again.
                             </Text>
                         </View>
                     )}
@@ -457,9 +697,7 @@ export default function RequestSuccess() {
                     {/* Page Footer */}
                     <View style={styles.pageFooter}>
                         <View style={styles.pageFooterLine} />
-                        <Text style={styles.pageFooterText}>
-                            © 2026 @TechVortex
-                        </Text>
+                        <Text style={styles.pageFooterText}>© 2026 @TechVortex</Text>
                     </View>
                 </ScrollView>
 
@@ -480,7 +718,7 @@ const styles = StyleSheet.create({
     },
     scroll: {
         paddingHorizontal: 16,
-        paddingTop: 24,
+        paddingTop: 20,
         paddingBottom: 100,
     },
 
@@ -508,6 +746,10 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: "#bbf7d0",
     },
+    statusBannerCompleted: {
+        backgroundColor: "#eef2ff",
+        borderColor: "#c7d2fe",
+    },
     statusBannerExpired: {
         backgroundColor: "#f1f5f9",
         borderColor: "#e2e8f0",
@@ -528,19 +770,46 @@ const styles = StyleSheet.create({
         backgroundColor: "#16a34a",
         marginRight: 10,
     },
+    statusBannerDotCompleted: { backgroundColor: "#6366f1" },
     statusBannerDotExpired: { backgroundColor: "#64748b" },
     statusBannerDotPending: { backgroundColor: "#ca8a04" },
     statusBannerDotRejected: { backgroundColor: "#dc2626" },
+    statusBannerDotPulse: {
+        // Additional styling if needed
+    },
 
     statusBannerText: {
         fontSize: 11,
         fontWeight: "800",
         color: "#16a34a",
         letterSpacing: 0.8,
+        flexShrink: 1,
     },
+    statusBannerTextCompleted: { color: "#6366f1" },
     statusBannerTextExpired: { color: "#64748b" },
     statusBannerTextPending: { color: "#ca8a04" },
     statusBannerTextRejected: { color: "#dc2626" },
+
+    /* ── Live Indicator ── */
+    liveIndicator: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginLeft: "auto",
+        paddingLeft: 10,
+    },
+    liveDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: "#16a34a",
+        marginRight: 5,
+    },
+    liveText: {
+        fontSize: 9,
+        fontWeight: "800",
+        color: "#16a34a",
+        letterSpacing: 0.8,
+    },
 
     /* ── Header ── */
     headerSection: {
@@ -579,6 +848,7 @@ const styles = StyleSheet.create({
         height: 5,
         backgroundColor: "#16a34a",
     },
+    passCardAccentCompleted: { backgroundColor: "#6366f1" },
     passCardAccentExpired: { backgroundColor: "#64748b" },
     passCardAccentPending: { backgroundColor: "#ca8a04" },
     passCardAccentRejected: { backgroundColor: "#dc2626" },
@@ -614,6 +884,10 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: "#bbf7d0",
     },
+    statusBadgeCompleted: {
+        backgroundColor: "#eef2ff",
+        borderColor: "#c7d2fe",
+    },
     statusBadgeExpired: {
         backgroundColor: "#f1f5f9",
         borderColor: "#e2e8f0",
@@ -633,6 +907,7 @@ const styles = StyleSheet.create({
         fontWeight: "700",
         color: "#16a34a",
     },
+    statusBadgeTextCompleted: { color: "#6366f1" },
     statusBadgeTextExpired: { color: "#64748b" },
     statusBadgeTextPending: { color: "#ca8a04" },
     statusBadgeTextRejected: { color: "#dc2626" },
@@ -657,6 +932,9 @@ const styles = StyleSheet.create({
         borderStyle: "dashed",
         position: "relative",
     },
+    qrInnerWrap: {
+        // Wrapper for opacity animation
+    },
     qrHint: {
         marginTop: 12,
         fontSize: 12,
@@ -664,6 +942,54 @@ const styles = StyleSheet.create({
         fontWeight: "600",
         letterSpacing: 0.3,
     },
+
+    /* ── Completed Overlay ── */
+    completedOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(255,255,255,0.95)",
+        borderRadius: 14,
+    },
+    completedOverlayIconWrap: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: "#eef2ff",
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 8,
+    },
+    completedOverlayTitle: {
+        fontSize: 16,
+        fontWeight: "800",
+        color: "#6366f1",
+        letterSpacing: 1.5,
+    },
+    completedOverlaySub: {
+        fontSize: 11,
+        color: "#818cf8",
+        fontWeight: "600",
+        marginTop: 2,
+    },
+    completedOverlayTimes: {
+        marginTop: 10,
+        backgroundColor: "#f5f3ff",
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    completedOverlayTimeText: {
+        fontSize: 10,
+        color: "#6366f1",
+        fontWeight: "600",
+    },
+
+    /* ── Expired Overlay ── */
     expiredOverlay: {
         position: "absolute",
         top: 0,
@@ -672,15 +998,174 @@ const styles = StyleSheet.create({
         bottom: 0,
         alignItems: "center",
         justifyContent: "center",
+        backgroundColor: "rgba(255,255,255,0.93)",
+        borderRadius: 14,
+        gap: 6,
     },
-    expiredText: {
-        fontSize: 18,
+    expiredOverlayTitle: {
+        fontSize: 16,
         fontWeight: "800",
         color: "#dc2626",
-        backgroundColor: "#fff",
-        paddingHorizontal: 10,
-        paddingVertical: 4,
+        letterSpacing: 1.5,
+    },
+
+    /* ── Pending Overlay ── */
+    pendingOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(255,255,255,0.93)",
+        borderRadius: 14,
+        gap: 6,
+    },
+    pendingOverlayTitle: {
+        fontSize: 16,
+        fontWeight: "800",
+        color: "#ca8a04",
+        letterSpacing: 1.5,
+    },
+
+    /* ── Rejected Overlay ── */
+    rejectedOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(255,255,255,0.93)",
+        borderRadius: 14,
+        gap: 6,
+    },
+    rejectedOverlayTitle: {
+        fontSize: 16,
+        fontWeight: "800",
+        color: "#dc2626",
+        letterSpacing: 1.5,
+    },
+
+    /* ── Scan Tracker ── */
+    scanTracker: {
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+    },
+    scanTrackerHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 14,
+    },
+    scanTrackerTitle: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#a78bfa",
+        textTransform: "uppercase",
+        letterSpacing: 1,
+    },
+    scanTrackerLive: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#f0fdf4",
+        paddingHorizontal: 8,
+        paddingVertical: 3,
         borderRadius: 6,
+        borderWidth: 1,
+        borderColor: "#bbf7d0",
+    },
+    scanTrackerLiveDot: {
+        width: 5,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: "#16a34a",
+        marginRight: 4,
+    },
+    scanTrackerLiveText: {
+        fontSize: 9,
+        fontWeight: "800",
+        color: "#16a34a",
+        letterSpacing: 0.5,
+    },
+    scanTrackerRow: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    scanTrackerLine: {
+        flex: 1,
+        height: 3,
+        backgroundColor: "#e2e8f0",
+        borderRadius: 2,
+        marginHorizontal: 8,
+        overflow: "hidden",
+    },
+    scanTrackerLineFill: {
+        height: "100%",
+        width: "0%",
+        backgroundColor: "#16a34a",
+        borderRadius: 2,
+    },
+    scanTrackerLineFillHalf: {
+        width: "50%",
+    },
+    scanTrackerLineFillFull: {
+        width: "100%",
+    },
+    scanBadge: {
+        alignItems: "center",
+        backgroundColor: "#f8fafc",
+        borderRadius: 10,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: "#e2e8f0",
+        minWidth: 90,
+    },
+    scanBadgeDone: {
+        backgroundColor: "#f0fdf4",
+        borderColor: "#bbf7d0",
+    },
+    scanBadgeContent: {
+        alignItems: "center",
+        marginTop: 4,
+    },
+    scanBadgeLabel: {
+        fontSize: 10,
+        fontWeight: "700",
+        color: "#94a3b8",
+        letterSpacing: 0.5,
+    },
+    scanBadgeLabelDone: {
+        color: "#16a34a",
+    },
+    scanBadgeTime: {
+        fontSize: 11,
+        fontWeight: "600",
+        color: "#1e1b4b",
+        marginTop: 2,
+    },
+    scanBadgeWaiting: {
+        fontSize: 10,
+        color: "#cbd5e1",
+        fontWeight: "500",
+        marginTop: 2,
+    },
+
+    /* ── Step Descriptions ── */
+    scanStepDesc: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        marginTop: 12,
+        paddingHorizontal: 4,
+    },
+    scanStepText: {
+        fontSize: 10,
+        color: "#94a3b8",
+        fontWeight: "500",
+        flex: 1,
+        textAlign: "center",
     },
 
     /* ── Info Grid ── */
@@ -790,6 +1275,48 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: "#4b5563",
         lineHeight: 22,
+    },
+
+    /* ── Celebration Box ── */
+    celebrationBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#eef2ff",
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+        borderRadius: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: "#c7d2fe",
+        gap: 10,
+    },
+    celebrationText: {
+        flex: 1,
+        fontSize: 13,
+        color: "#4338ca",
+        fontWeight: "700",
+        lineHeight: 20,
+    },
+
+    /* ── Completed Note ── */
+    completedNoteBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#eef2ff",
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderRadius: 12,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: "#c7d2fe",
+        gap: 10,
+    },
+    completedNoteText: {
+        flex: 1,
+        fontSize: 12,
+        color: "#4338ca",
+        fontWeight: "600",
+        lineHeight: 18,
     },
 
     /* ── Note ── */
