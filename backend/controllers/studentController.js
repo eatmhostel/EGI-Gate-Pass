@@ -60,6 +60,7 @@ exports.loginStudent = async (req, res) => {
     res.json({
       success: true,
       user: {
+        _id: student._id,
         name: student.fullName,
         regNo: student.regNo,
         course: student.course,

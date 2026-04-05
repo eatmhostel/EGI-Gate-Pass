@@ -1,46 +1,108 @@
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
     View,
     Text,
     StyleSheet,
     ScrollView,
-    Image,
     TouchableOpacity,
     StatusBar,
+    ActivityIndicator,
+    RefreshControl,
 } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { EXPO_PUBLIC_API_URL } from "@env";
 
 import Navbar from "../components/Navbar";
 import FooterSecurity from "../components/FooterSecurity";
 
+const fmtTime = (d) =>
+    d
+        ? new Date(d).toLocaleTimeString("en-IN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+          })
+        : "";
+
+const getInitials = (name) =>
+    name
+        ? name
+              .split(" ")
+              .map((w) => w[0])
+              .join("")
+              .toUpperCase()
+              .slice(0, 2)
+        : "?";
+
 export default function SecurityDashboard() {
+    const navigation = useNavigation();
+    const [stats, setStats] = useState(null);
+    const [recentScans, setRecentScans] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchData = useCallback(async (isRefresh = false) => {
+        if (isRefresh) setRefreshing(true);
+        else setLoading(true);
+
+        try {
+            const [sRes, hRes] = await Promise.all([
+                fetch(`${EXPO_PUBLIC_API_URL}/security-scans/today-stats`),
+                fetch(
+                    `${EXPO_PUBLIC_API_URL}/security-scans/history?filter=all&limit=5`
+                ),
+            ]);
+
+            const sData = await sRes.json();
+            const hData = await hRes.json();
+
+            if (sData.success) setStats(sData.stats);
+            if (hData.success) setRecentScans(hData.scans);
+        } catch (err) {
+            console.log("Dashboard fetch error:", err);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#003080" />
             <Navbar />
 
-            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-                {/* Status Bar */}
-                {/* <View style={styles.statusBar}>
-                    <View style={styles.statusHeader}>
-                        <View style={styles.statusIndicator} />
-                        <Text style={styles.statusText}>System Active: Main Gate B</Text>
-                    </View>
-                    <Text style={styles.statusSub}>Uptime: 14h 22m</Text>
-                </View> */}
-
+            <ScrollView
+                contentContainerStyle={styles.scroll}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={() => fetchData(true)}
+                        colors={["#1a237e"]}
+                        tintColor="#1a237e"
+                    />
+                }
+            >
                 {/* Header */}
                 <Text style={styles.heading}>Security Dashboard</Text>
                 <Text style={styles.subheading}>
                     Verify credentials and manage campus access.
                 </Text>
 
-                {/* Gate Control */}
+                {/* ── Gate Control ─────────────────────── */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <View style={styles.cardIcon}>
-                            <MaterialIcons name="security" size={24} color="#0040a1" />
+                            <MaterialIcons
+                                name="security"
+                                size={24}
+                                color="#0040a1"
+                            />
                         </View>
                         <View>
                             <Text style={styles.cardTitle}>Gate Control</Text>
@@ -51,77 +113,238 @@ export default function SecurityDashboard() {
                     </View>
 
                     <View style={styles.row}>
-                        <TouchableOpacity style={styles.primaryBtn} activeOpacity={0.8}>
-                            <MaterialIcons name="qr-code-scanner" size={20} color="#fff" />
+                        <TouchableOpacity
+                            style={styles.primaryBtn}
+                            activeOpacity={0.8}
+                            onPress={() => navigation.navigate("Scanner")}
+                        >
+                            <MaterialIcons
+                                name="qr-code-scanner"
+                                size={20}
+                                color="#fff"
+                            />
                             <Text style={styles.btnText}>Scan QR</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.8}>
-                            <MaterialIcons name="edit" size={20} color="#0040a1" />
-                            <Text style={styles.secondaryBtnText}>Manual Entry</Text>
+                        <TouchableOpacity
+                            style={styles.secondaryBtn}
+                            activeOpacity={0.8}
+                        >
+                            <MaterialIcons
+                                name="edit"
+                                size={20}
+                                color="#0040a1"
+                            />
+                            <Text style={styles.secondaryBtnText}>
+                                Manual Entry
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Stats */}
-                <View style={styles.row}>
-                    <View style={styles.statBoxGreen}>
-                        <View style={styles.statHeader}>
-                            <MaterialIcons name="today" size={18} color="#006633" />
-                            <Text style={styles.statLabel}>Passes Today</Text>
-                        </View>
-                        <Text style={styles.statNumber}>142</Text>
-                        <View style={styles.statBar}>
-                            <View style={[styles.statBarFill, { width: '75%' }]} />
-                        </View>
-                    </View>
+                {/* ── Stats ────────────────────────────── */}
+                {loading ? (
+                    <ActivityIndicator
+                        size="large"
+                        color="#1a237e"
+                        style={{ marginVertical: 40 }}
+                    />
+                ) : stats ? (
+                    <>
+                        <View style={styles.row}>
+                            {/* Passes Today */}
+                            <View style={styles.statBoxGreen}>
+                                <View style={styles.statHeader}>
+                                    <MaterialIcons
+                                        name="verified-user"
+                                        size={18}
+                                        color="#006633"
+                                    />
+                                    <Text style={styles.statLabel}>
+                                        Passes Today
+                                    </Text>
+                                </View>
+                                <Text style={styles.statNumber}>
+                                    {stats.total}
+                                </Text>
+                                <View style={styles.statBar}>
+                                    <View
+                                        style={[
+                                            styles.statBarFill,
+                                            {
+                                                width:
+                                                    stats.total > 0
+                                                        ? `${Math.min((stats.exits / Math.max(stats.total, 1)) * 100, 100)}%`
+                                                        : "0%",
+                                            },
+                                        ]}
+                                    />
+                                </View>
+                                <Text style={styles.statSubText}>
+                                    {stats.exits} out · {stats.entries} in
+                                </Text>
+                            </View>
 
-                    <View style={styles.statBox}>
-                        <View style={styles.statHeader}>
-                            <MaterialIcons name="people" size={18} color="#0040a1" />
-                            <Text style={styles.statLabel}>Active Visitors</Text>
+                            {/* Active Outside */}
+                            <View style={styles.statBoxAmber}>
+                                <View style={styles.statHeader}>
+                                    <MaterialIcons
+                                        name="people-alt"
+                                        size={18}
+                                        color="#e65100"
+                                    />
+                                    <Text style={styles.statLabel}>
+                                        Outside Campus
+                                    </Text>
+                                </View>
+                                <Text style={styles.statNumberAmber}>
+                                    {stats.activeOutside}
+                                </Text>
+                                <View style={styles.statBar}>
+                                    <View
+                                        style={[
+                                            styles.statBarFillAmber,
+                                            {
+                                                width:
+                                                    stats.activeOutside > 0
+                                                        ? `${Math.min(stats.activeOutside * 3, 100)}%`
+                                                        : "0%",
+                                            },
+                                        ]}
+                                    />
+                                </View>
+                                <Text style={styles.statSubText}>
+                                    Awaiting return
+                                </Text>
+                            </View>
                         </View>
-                        <Text style={styles.statNumber}>28</Text>
-                        <View style={styles.statBar}>
-                            <View style={[styles.statBarFillBlue, { width: '40%' }]} />
-                        </View>
-                    </View>
-                </View>
 
-                {/* Recent Scans */}
+                        {/* Denied row */}
+                        <View style={styles.deniedRow}>
+                            <MaterialIcons
+                                name="block"
+                                size={16}
+                                color="#c62828"
+                            />
+                            <Text style={styles.deniedText}>
+                                <Text style={styles.deniedNum}>
+                                    {stats.denied}
+                                </Text>{" "}
+                                denied today
+                            </Text>
+                        </View>
+                    </>
+                ) : null}
+
+                {/* ── Recent Scans ─────────────────────── */}
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Recent Scans</Text>
-                    <TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => navigation.navigate("SecurityHistory")}
+                    >
                         <Text style={styles.viewAllText}>View All</Text>
                     </TouchableOpacity>
                 </View>
 
-                {[1,2,3].map((item, index) => (
-                    <View key={index} style={styles.scanItem}>
-                        <View style={styles.avatarContainer}>
-                            <Image
-                                source={{
-                                    uri: "https://randomuser.me/api/portraits/men/1.jpg",
-                                }}
-                                style={styles.avatar}
-                            />
-                            <View style={styles.statusDot} />
-                        </View>
+                {!loading && recentScans.length === 0 && (
+                    <View style={styles.emptyBox}>
+                        <MaterialCommunityIcons
+                            name="qrcode-scan"
+                            size={48}
+                            color="#c5cae9"
+                        />
+                        <Text style={styles.emptyText}>No scans today yet</Text>
+                    </View>
+                )}
 
-                        <View style={styles.scanInfo}>
-                            <Text style={styles.name}>Student Name</Text>
-                            <Text style={styles.subText}>B.Tech • CSE</Text>
-                        </View>
+                {recentScans.map((item) => {
+                    const isExit =
+                        item.action === "exit" && item.status === "allowed";
+                    const isEnter =
+                        item.action === "enter" && item.status === "allowed";
+                    const isDenied = item.status === "denied";
 
-                        <View style={styles.scanTime}>
-                            <Text style={styles.time}>14:22</Text>
-                            <View style={styles.approvedBadge}>
-                                <Text style={styles.approved}>Approved</Text>
+                    const avatarBg = isExit
+                        ? "#f59e0b"
+                        : isEnter
+                        ? "#16a34a"
+                        : "#dc2626";
+                    const badgeBg = isExit
+                        ? "#fffbeb"
+                        : isEnter
+                        ? "#f0fdf4"
+                        : "#fef2f2";
+                    const badgeColor = isExit
+                        ? "#b45309"
+                        : isEnter
+                        ? "#15803d"
+                        : "#dc2626";
+                    const badgeLabel = isExit
+                        ? "EXIT"
+                        : isEnter
+                        ? "ENTER"
+                        : "DENIED";
+
+                    const stu = item.student || {};
+
+                    return (
+                        <View key={item._id} style={styles.scanItem}>
+                            <View
+                                style={[
+                                    styles.avatar,
+                                    { backgroundColor: avatarBg },
+                                ]}
+                            >
+                                <Text style={styles.avatarText}>
+                                    {getInitials(
+                                        item.studentName || stu.fullName
+                                    )}
+                                </Text>
+                            </View>
+
+                            <View style={styles.scanInfo}>
+                                <Text style={styles.name}>
+                                    {item.studentName ||
+                                        stu.fullName ||
+                                        "Unknown"}
+                                </Text>
+                                <Text style={styles.subText}>
+                                    {[
+                                        item.studentRegNo || stu.regNo,
+                                        item.destination ||
+                                            (item.gatePass &&
+                                                item.gatePass.destination),
+                                    ]
+                                        .filter(Boolean)
+                                        .join(" • ")}
+                                </Text>
+                            </View>
+
+                            <View style={styles.scanMeta}>
+                                <Text style={styles.time}>
+                                    {fmtTime(item.createdAt)}
+                                </Text>
+                                <View
+                                    style={[
+                                        styles.badge,
+                                        { backgroundColor: badgeBg },
+                                    ]}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.badgeText,
+                                            { color: badgeColor },
+                                        ]}
+                                    >
+                                        {badgeLabel}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
-                    </View>
-                ))}
+                    );
+                })}
 
+                <View style={{ height: 100 }} />
             </ScrollView>
 
             <FooterSecurity />
@@ -140,7 +363,6 @@ const styles = StyleSheet.create({
         paddingBottom: 120,
     },
 
-    
     heading: {
         fontSize: 28,
         fontWeight: "bold",
@@ -154,6 +376,7 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
 
+    /* ── Card ─────────────────────────────────────────── */
     card: {
         backgroundColor: "#fff",
         padding: 20,
@@ -242,18 +465,7 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
 
-    statBox: {
-        flex: 1,
-        backgroundColor: "#fff",
-        padding: 18,
-        borderRadius: 16,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.06,
-        shadowRadius: 5,
-        elevation: 5,
-    },
-
+    /* ── Stat Boxes ───────────────────────────────────── */
     statBoxGreen: {
         flex: 1,
         backgroundColor: "#fff",
@@ -264,8 +476,22 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.06,
         shadowRadius: 5,
         elevation: 5,
-        borderLeftWidth: 3,
+        borderLeftWidth: 4,
         borderLeftColor: "#4caf50",
+    },
+
+    statBoxAmber: {
+        flex: 1,
+        backgroundColor: "#fff",
+        padding: 18,
+        borderRadius: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.06,
+        shadowRadius: 5,
+        elevation: 5,
+        borderLeftWidth: 4,
+        borderLeftColor: "#ff9800",
     },
 
     statHeader: {
@@ -282,9 +508,16 @@ const styles = StyleSheet.create({
     },
 
     statNumber: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: "bold",
         color: "#1a237e",
+        marginBottom: 8,
+    },
+
+    statNumberAmber: {
+        fontSize: 32,
+        fontWeight: "bold",
+        color: "#e65100",
         marginBottom: 8,
     },
 
@@ -301,17 +534,51 @@ const styles = StyleSheet.create({
         borderRadius: 2,
     },
 
-    statBarFillBlue: {
+    statBarFillAmber: {
         height: "100%",
-        backgroundColor: "#3f51b5",
+        backgroundColor: "#ff9800",
         borderRadius: 2,
     },
 
+    statSubText: {
+        fontSize: 11,
+        color: "#90a4ae",
+        marginTop: 6,
+        fontWeight: "500",
+    },
+
+    /* ── Denied Row ───────────────────────────────────── */
+    deniedRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#fef2f2",
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 10,
+        marginTop: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: "#fecaca",
+    },
+
+    deniedText: {
+        fontSize: 13,
+        color: "#7f1d1d",
+        marginLeft: 6,
+        fontWeight: "500",
+    },
+
+    deniedNum: {
+        fontWeight: "800",
+        color: "#dc2626",
+    },
+
+    /* ── Section ──────────────────────────────────────── */
     sectionHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginTop: 24,
+        marginTop: 28,
         marginBottom: 16,
     },
 
@@ -327,41 +594,34 @@ const styles = StyleSheet.create({
         fontWeight: "500",
     },
 
+    /* ── Scan Items ───────────────────────────────────── */
     scanItem: {
         flexDirection: "row",
         alignItems: "center",
         backgroundColor: "#fff",
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 12,
+        padding: 14,
+        borderRadius: 14,
+        marginBottom: 10,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.04,
         shadowRadius: 3,
-        elevation: 3,
-    },
-
-    avatarContainer: {
-        position: "relative",
-        marginRight: 14,
+        elevation: 2,
     },
 
     avatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        justifyContent: "center",
+        alignItems: "center",
+        marginRight: 14,
     },
 
-    statusDot: {
-        position: "absolute",
-        bottom: 0,
-        right: 0,
-        width: 14,
-        height: 14,
-        borderRadius: 7,
-        backgroundColor: "#4caf50",
-        borderWidth: 2,
-        borderColor: "#fff",
+    avatarText: {
+        color: "#fff",
+        fontSize: 15,
+        fontWeight: "700",
     },
 
     scanInfo: {
@@ -370,36 +630,49 @@ const styles = StyleSheet.create({
 
     name: {
         fontWeight: "600",
-        fontSize: 16,
+        fontSize: 15,
         color: "#263238",
     },
 
     subText: {
-        fontSize: 13,
+        fontSize: 12,
         color: "#78909c",
         marginTop: 2,
     },
 
-    scanTime: {
+    scanMeta: {
         alignItems: "flex-end",
+        gap: 4,
     },
 
     time: {
         fontSize: 13,
         color: "#546e7a",
-        marginBottom: 4,
+        fontWeight: "600",
     },
 
-    approvedBadge: {
-        backgroundColor: "#e8f5e9",
+    badge: {
         paddingHorizontal: 8,
         paddingVertical: 3,
-        borderRadius: 10,
+        borderRadius: 8,
     },
 
-    approved: {
-        fontSize: 11,
-        color: "#2e7d32",
-        fontWeight: "600",
+    badgeText: {
+        fontSize: 10,
+        fontWeight: "800",
+        letterSpacing: 0.5,
+    },
+
+    /* ── Empty ────────────────────────────────────────── */
+    emptyBox: {
+        alignItems: "center",
+        paddingVertical: 40,
+        gap: 8,
+    },
+
+    emptyText: {
+        fontSize: 14,
+        color: "#90a4ae",
+        fontWeight: "500",
     },
 });

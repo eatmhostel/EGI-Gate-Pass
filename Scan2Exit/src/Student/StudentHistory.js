@@ -1,96 +1,588 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
     View,
     Text,
     ScrollView,
     StyleSheet,
+    TouchableOpacity,
+    ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import axios from "axios";
+import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { EXPO_PUBLIC_API_URL } from "@env";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/FooterStudent";
 
-export default function StudentHistory() {
+const STATUS_CONFIG = {
+    active: {
+        label: "Active",
+        bg: "#dcfce7",
+        text: "#16a34a",
+        icon: "✓",
+        border: "#bbf7d0",
+    },
+    approved: {
+        label: "Approved",
+        bg: "#dcfce7",
+        text: "#16a34a",
+        icon: "✓",
+        border: "#bbf7d0",
+    },
+    pending: {
+        label: "Pending",
+        bg: "#fef9c3",
+        text: "#ca8a04",
+        icon: "⏳",
+        border: "#fef08a",
+    },
+    rejected: {
+        label: "Rejected",
+        bg: "#fee2e2",
+        text: "#dc2626",
+        icon: "✕",
+        border: "#fecaca",
+    },
+    expired: {
+        label: "Expired",
+        bg: "#f1f5f9",
+        text: "#64748b",
+        icon: "⊘",
+        border: "#e2e8f0",
+    },
+};
+
+function formatDate(dateStr) {
+    if (!dateStr) return "—";
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+    });
+}
+
+function formatTime(dateStr) {
+    if (!dateStr) return "—";
+    const d = new Date(dateStr);
+    return d.toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+    });
+}
+
+// ✅ Compute display status from DB status + isExpired flag
+function getDisplayStatus(item) {
+    if (item.status === "approved") {
+        return item.isExpired ? "expired" : "active";
+    }
+    return item.status?.toLowerCase() || "pending";
+}
+
+function InfoRow({ label, value }) {
     return (
-        <View style={styles.container}>
-            <Navbar />
-
-            <ScrollView contentContainerStyle={styles.scroll}>
-                {/* Heading */}
-                <Text style={styles.title}>History</Text>
-                <Text style={styles.subtitle}>
-                    View your past gate pass requests and activity logs.
-                </Text>
-
-                {/* Example Card */}
-                <View style={styles.card}>
-                    <Text style={styles.cardTitle}>No History Available</Text>
-                    <Text style={styles.cardText}>
-                        Your previous requests will appear here once you start using the system.
-                    </Text>
-                </View>
-
-                {/* Footer Text */}
-                <View style={styles.footerContainer}>
-                    <Text style={styles.footerText}>© 2026 @TechVortex</Text>
-                </View>
-            </ScrollView>
-
-            <Footer />
+        <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>{label}</Text>
+            <Text style={styles.infoValue}>{value || "—"}</Text>
         </View>
     );
 }
 
+export default function StudentHistory() {
+    const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [studentId, setStudentId] = useState(null);
+
+    const navigation = useNavigation();
+
+    useEffect(() => {
+        loadStudentId();
+    }, []);
+
+    useEffect(() => {
+        if (studentId) {
+            fetchHistory();
+        }
+    }, [studentId]);
+
+    const loadStudentId = async () => {
+        try {
+            const id = await AsyncStorage.getItem("studentId");
+            setStudentId(id);
+        } catch (err) {
+            console.log(err);
+        }
+    };
+
+    const API_URL = EXPO_PUBLIC_API_URL;
+
+    const fetchHistory = async () => {
+        try {
+            const res = await axios.get(
+                `${API_URL}/gatepass/student/${studentId}`
+            );
+            if (res.data.success) {
+                setHistory(res.data.requests);
+            }
+        } catch (err) {
+            console.log("ERROR:", err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            <View style={styles.container}>
+                <Navbar />
+
+                <ScrollView
+                    contentContainerStyle={styles.scroll}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Header Section */}
+                    <View style={styles.headerSection}>
+                        <Text style={styles.greeting}>Your Records</Text>
+                        <Text style={styles.subtitle}>
+                            {loading
+                                ? "Loading..."
+                                : `${history.length} gatepass ${history.length === 1 ? "request" : "requests"} found`}
+                        </Text>
+                    </View>
+
+                    {/* Summary Chips — uses display status */}
+                    {!loading && history.length > 0 && (
+                        <View style={styles.chipsRow}>
+                            {["active", "pending", "expired", "rejected"].map(
+                                (key) => {
+                                    const count = history.filter(
+                                        (h) => getDisplayStatus(h) === key
+                                    ).length;
+                                    if (count === 0) return null;
+                                    const cfg = STATUS_CONFIG[key];
+                                    return (
+                                        <View
+                                            key={key}
+                                            style={[
+                                                styles.chip,
+                                                {
+                                                    backgroundColor: cfg.bg,
+                                                    borderColor: cfg.border,
+                                                },
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.chipText,
+                                                    { color: cfg.text },
+                                                ]}
+                                            >
+                                                {cfg.icon} {count}
+                                            </Text>
+                                        </View>
+                                    );
+                                }
+                            )}
+                        </View>
+                    )}
+
+                    {/* Loading State */}
+                    {loading && (
+                        <View style={styles.centerBox}>
+                            <ActivityIndicator size="large" color="#7c3aed" />
+                            <Text style={styles.loadingText}>
+                                Fetching your history...
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Empty State */}
+                    {!loading && history.length === 0 && (
+                        <View style={styles.emptyState}>
+                            <View style={styles.emptyIconWrap}>
+                                <Text style={styles.emptyIcon}>📋</Text>
+                            </View>
+                            <Text style={styles.emptyTitle}>No History Yet</Text>
+                            <Text style={styles.emptySubtitle}>
+                                Your approved and past gatepass requests will
+                                appear here.
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Cards — uses display status */}
+                    {!loading &&
+                        history.length > 0 &&
+                        history.map((item, index) => {
+                            const displayKey = getDisplayStatus(item);
+                            const statusCfg =
+                                STATUS_CONFIG[displayKey] ||
+                                STATUS_CONFIG.pending;
+                            return (
+                                <TouchableOpacity
+                                    key={item._id}
+                                    style={styles.card}
+                                    activeOpacity={0.85}
+                                    onPress={() =>
+                                        navigation.navigate("RequestSuccess", {
+                                            requestId: item._id,
+                                        })
+                                    }
+                                >
+                                    {/* Card Top Accent Bar */}
+                                    <View
+                                        style={[
+                                            styles.cardAccent,
+                                            {
+                                                backgroundColor: statusCfg.text,
+                                            },
+                                        ]}
+                                    />
+
+                                    {/* Card Header */}
+                                    <View style={styles.cardHeader}>
+                                        <View style={styles.cardHeaderLeft}>
+                                            <Text style={styles.cardIndex}>
+                                                #{String(index + 1).padStart(2, "0")}
+                                            </Text>
+                                            <Text style={styles.cardDestination}>
+                                                {item.destination ||
+                                                    "Unknown Destination"}
+                                            </Text>
+                                        </View>
+                                        <View
+                                            style={[
+                                                styles.statusBadge,
+                                                {
+                                                    backgroundColor: statusCfg.bg,
+                                                    borderColor: statusCfg.border,
+                                                },
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.statusText,
+                                                    { color: statusCfg.text },
+                                                ]}
+                                            >
+                                                {statusCfg.icon}{" "}
+                                                {statusCfg.label}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    {/* Card Divider */}
+                                    <View style={styles.divider} />
+
+                                    {/* Card Body */}
+                                    <View style={styles.cardBody}>
+                                        <View style={styles.infoGrid}>
+                                            <View style={styles.infoBlock}>
+                                                <Text style={styles.infoBlockLabel}>
+                                                    Date
+                                                </Text>
+                                                <Text style={styles.infoBlockValue}>
+                                                    {formatDate(item.outTime)}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.infoBlock}>
+                                                <Text style={styles.infoBlockLabel}>
+                                                    Out Time
+                                                </Text>
+                                                <Text style={styles.infoBlockValue}>
+                                                    {formatTime(item.outTime)}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.infoBlock}>
+                                                <Text style={styles.infoBlockLabel}>
+                                                    Return Time
+                                                </Text>
+                                                <Text style={styles.infoBlockValue}>
+                                                    {formatTime(item.returnTime)}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.infoBlock}>
+                                                <Text style={styles.infoBlockLabel}>
+                                                    Purpose
+                                                </Text>
+                                                <Text style={styles.infoBlockValue}>
+                                                    {item.purpose || "General"}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {item.reason && (
+                                            <>
+                                                <View style={styles.divider} />
+                                                <InfoRow
+                                                    label="Reason"
+                                                    value={item.reason}
+                                                />
+                                            </>
+                                        )}
+                                    </View>
+
+                                    {/* Card Footer */}
+                                    <View style={styles.cardFooter}>
+                                        <Text style={styles.cardFooterText}>
+                                            Tap to view details →
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+
+                    {/* Footer */}
+                    <View style={styles.footerContainer}>
+                        <View style={styles.footerDivider} />
+                        <Text style={styles.footerText}>
+                            © 2026 @TechVortex
+                        </Text>
+                    </View>
+                </ScrollView>
+
+                <Footer />
+            </View>
+        </SafeAreaView>
+    );
+}
+
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: "#f5f3ff",
+    },
     container: {
         flex: 1,
-        backgroundColor: "#faf8ff",
+        backgroundColor: "#f5f3ff",
     },
-
     scroll: {
-        padding: 16,
-        paddingTop: 30,
+        paddingHorizontal: 16,
+        paddingTop: 24,
+        paddingBottom: 100,
     },
 
-    title: {
-        fontSize: 28,
-        fontWeight: "bold",
-        marginBottom: 6,
+    /* ── Header ── */
+    headerSection: {
+        marginBottom: 20,
     },
-
+    greeting: {
+        fontSize: 30,
+        fontWeight: "800",
+        color: "#1e1b4b",
+        letterSpacing: -0.5,
+    },
     subtitle: {
-        color: "#666",
-        marginBottom: 20,
+        fontSize: 14,
+        color: "#8b8ba7",
+        marginTop: 4,
+        fontWeight: "500",
     },
 
-    card: {
-        backgroundColor: "#fff",
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 20,
+    /* ── Summary Chips ── */
+    chipsRow: {
+        flexDirection: "row",
+        gap: 8,
+        marginBottom: 24,
+        flexWrap: "wrap",
+    },
+    chip: {
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+    },
+    chipText: {
+        fontSize: 12,
+        fontWeight: "700",
     },
 
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: "bold",
+    /* ── Loading ── */
+    centerBox: {
+        paddingVertical: 60,
+        alignItems: "center",
+        gap: 12,
+    },
+    loadingText: {
+        fontSize: 14,
+        color: "#8b8ba7",
+        fontWeight: "500",
+    },
+
+    /* ── Empty State ── */
+    emptyState: {
+        alignItems: "center",
+        paddingVertical: 50,
+        paddingHorizontal: 20,
+    },
+    emptyIconWrap: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: "#ede9fe",
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 16,
+    },
+    emptyIcon: {
+        fontSize: 36,
+    },
+    emptyTitle: {
+        fontSize: 20,
+        fontWeight: "700",
+        color: "#1e1b4b",
         marginBottom: 6,
     },
+    emptySubtitle: {
+        fontSize: 14,
+        color: "#8b8ba7",
+        textAlign: "center",
+        lineHeight: 20,
+        marginBottom: 24,
+    },
 
-    cardText: {
+    /* ── Card ── */
+    card: {
+        backgroundColor: "#ffffff",
+        borderRadius: 16,
+        marginBottom: 16,
+        overflow: "hidden",
+        shadowColor: "#7c3aed",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: "#ede9fe",
+    },
+    cardAccent: {
+        height: 4,
+        width: "100%",
+    },
+    cardHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        paddingHorizontal: 16,
+        paddingTop: 14,
+    },
+    cardHeaderLeft: {
+        flex: 1,
+        marginRight: 12,
+    },
+    cardIndex: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: "#a78bfa",
+        marginBottom: 2,
+        letterSpacing: 0.5,
+    },
+    cardDestination: {
+        fontSize: 17,
+        fontWeight: "700",
+        color: "#1e1b4b",
+        lineHeight: 24,
+    },
+    statusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+        borderWidth: 1,
+        flexShrink: 0,
+    },
+    statusText: {
+        fontSize: 11,
+        fontWeight: "700",
+        letterSpacing: 0.2,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: "#f1f0fb",
+        marginHorizontal: 16,
+        marginVertical: 12,
+    },
+
+    /* ── Card Body ── */
+    cardBody: {
+        paddingHorizontal: 16,
+    },
+    infoGrid: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 12,
+    },
+    infoBlock: {
+        flex: 1,
+        minWidth: "45%",
+        backgroundColor: "#faf9ff",
+        borderRadius: 10,
+        padding: 10,
+    },
+    infoBlockLabel: {
+        fontSize: 10,
+        fontWeight: "600",
+        color: "#a78bfa",
+        textTransform: "uppercase",
+        letterSpacing: 0.6,
+        marginBottom: 3,
+    },
+    infoBlockValue: {
         fontSize: 13,
-        color: "#666",
+        fontWeight: "600",
+        color: "#1e1b4b",
     },
-
-    footerContainer: {
-        width: '100%',
-        paddingVertical: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#faf8ff',
+    infoRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingVertical: 2,
     },
-
-    footerText: {
+    infoLabel: {
         fontSize: 12,
-        color: '#888',
-        textAlign: 'center',
+        color: "#8b8ba7",
+        fontWeight: "500",
+    },
+    infoValue: {
+        fontSize: 13,
+        color: "#1e1b4b",
+        fontWeight: "600",
+        flex: 1,
+        textAlign: "right",
+    },
+
+    /* ── Card Footer ── */
+    cardFooter: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderTopWidth: 1,
+        borderTopColor: "#f1f0fb",
+    },
+    cardFooterText: {
+        fontSize: 12,
+        color: "#a78bfa",
+        fontWeight: "600",
+        textAlign: "center",
+    },
+
+    /* ── Footer ── */
+    footerContainer: {
+        alignItems: "center",
+        paddingTop: 20,
+        paddingBottom: 10,
+    },
+    footerDivider: {
+        width: 60,
+        height: 3,
+        borderRadius: 2,
+        backgroundColor: "#e0dafb",
+        marginBottom: 12,
+    },
+    footerText: {
+        fontSize: 11,
+        color: "#b0adc4",
+        fontWeight: "500",
     },
 });

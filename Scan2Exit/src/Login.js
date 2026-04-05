@@ -15,7 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { EXPO_PUBLIC_API_URL } from "@env";
 import { AuthContext } from "./context/AuthContext";
-
+import AsyncStorage from "@react-native-async-storage/async-storage";
 const { width, height } = Dimensions.get('window');
 
 const COLORS = {
@@ -99,8 +99,9 @@ const Login = () => {
       });
 
       const data = await res.json();
-
       if (data.success) {
+        await AsyncStorage.setItem("studentId", data.user._id); // ✅ ADD THIS
+
         setUser({
           name: data.user.name,
           regNo: data.user.regNo,

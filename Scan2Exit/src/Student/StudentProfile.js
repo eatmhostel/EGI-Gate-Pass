@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext, useState, useEffect } from "react";
 import {
     View,
     Text,
@@ -6,21 +6,51 @@ import {
     ScrollView,
     Image,
     TouchableOpacity,
+    ActivityIndicator,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
-
 import Navbar from "../components/Navbar";
 import Footer from "../components/FooterStudent";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { EXPO_PUBLIC_API_URL } from "@env";
 
 export default function StudentProfile() {
     const { user } = useContext(AuthContext);
+    
+    const [totalPasses, setTotalPasses] = useState(0);
+    const [hasActivePass, setHasActivePass] = useState(false);
+    const [loadingStats, setLoadingStats] = useState(true);
+
+    // ✅ Fetch real-time stats on mount
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const studentId = await AsyncStorage.getItem("studentId");
+                if (!studentId) return;
+
+                const res = await fetch(`${EXPO_PUBLIC_API_URL}/gatepass/dashboard/${studentId}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    setTotalPasses(data.totalPasses || 0);
+                    setHasActivePass(!!data.activePass);
+                }
+            } catch (err) {
+                console.log("Failed to fetch profile stats:", err.message);
+            } finally {
+                setLoadingStats(false);
+            }
+        };
+
+        fetchStats();
+    }, []);
+
     return (
         <View style={styles.container}>
             <Navbar />
 
-            <ScrollView contentContainerStyle={styles.scroll}>
+            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
                 {/* Profile Header */}
                 <View style={styles.profileSection}>
@@ -41,7 +71,7 @@ export default function StudentProfile() {
                     <View style={styles.metaRow}>
                         <Text style={styles.meta}>{user?.regNo}</Text>
                         <Text style={styles.dot}>•</Text>
-                        <Text style={styles.value}>{user?.branch}</Text>
+                        <Text style={styles.branch}>{user?.branch}</Text>
                     </View>
                 </View>
 
@@ -50,16 +80,30 @@ export default function StudentProfile() {
                     <View style={styles.statBox}>
                         <Text style={styles.statLabel}>TOTAL PASSES</Text>
                         <View style={styles.statRow}>
-                            <Text style={styles.statNumber}>24</Text>
+                            {loadingStats ? (
+                                <ActivityIndicator size="small" color="#0040a1" />
+                            ) : (
+                                <Text style={styles.statNumber}>{totalPasses}</Text>
+                            )}
                             <Text style={styles.statSub}>Issued</Text>
                         </View>
                     </View>
 
-                    <View style={styles.activeBox}>
-                        <Text style={styles.statLabel}>ACTIVE PASS</Text>
-                        <Text style={styles.activeText}>YES</Text>
-                        <Text style={styles.activeSub}>
-                            Current gate pass is valid for exit
+                    <View style={[styles.activeBox, !hasActivePass && !loadingStats && styles.activeBoxInactive]}>
+                        <Text style={[styles.statLabel, !hasActivePass && styles.statLabelInactive]}>ACTIVE PASS</Text>
+                        
+                        {loadingStats ? (
+                            <ActivityIndicator size="small" color={hasActivePass ? "#1b6d24" : "#666"} />
+                        ) : (
+                            <Text style={[styles.activeText, !hasActivePass && styles.activeTextInactive]}>
+                                {hasActivePass ? "YES" : "NO"}
+                            </Text>
+                        )}
+                        
+                        <Text style={[styles.activeSub, !hasActivePass && styles.activeSubInactive]}>
+                            {hasActivePass 
+                                ? "Current gate pass is valid for exit" 
+                                : "No active gate pass right now"}
                         </Text>
                     </View>
                 </View>
@@ -74,12 +118,12 @@ export default function StudentProfile() {
                     </View>
 
                     <View style={styles.row}>
-                        <View style={styles.infoBlock}>
+                        <View style={[styles.infoBlock, { flex: 1, marginRight: 10 }]}>
                             <Text style={styles.label}>Registration Number</Text>
                             <Text style={styles.value}>{user?.regNo}</Text>
                         </View>
 
-                        <View style={styles.infoBlock}>
+                        <View style={[styles.infoBlock, { flex: 1 }]}>
                             <Text style={styles.label}>Course</Text>
                             <Text style={styles.value}>{user?.course}</Text>
                         </View>
@@ -153,6 +197,13 @@ const styles = StyleSheet.create({
         width: 110,
         height: 110,
         borderRadius: 55,
+        borderWidth: 3,
+        borderColor: "#fff",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
     },
 
     verified: {
@@ -160,30 +211,34 @@ const styles = StyleSheet.create({
         bottom: 0,
         right: 0,
         backgroundColor: "#a0f399",
-        borderRadius: 10,
-        padding: 3,
+        borderRadius: 12,
+        padding: 4,
+        borderWidth: 2,
+        borderColor: "#fff",
     },
 
     name: {
         fontSize: 22,
         fontWeight: "bold",
+        color: "#1a237e",
     },
 
     metaRow: {
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
+        marginTop: 4,
     },
 
     meta: {
-        fontSize: 10,
+        fontSize: 12,
         color: "#777",
     },
 
     branch: {
         fontSize: 12,
         color: "#0040a1",
-        fontWeight: "600",
+        fontWeight: "700",
     },
 
     dot: {
@@ -193,38 +248,64 @@ const styles = StyleSheet.create({
 
     statsRow: {
         flexDirection: "row",
-        gap: 10,
-        marginBottom: 20,
+        gap: 12,
+        marginBottom: 24,
     },
 
     statBox: {
         flex: 1,
-        backgroundColor: "#eee",
-        padding: 16,
-        borderRadius: 12,
+        backgroundColor: "#fff",
+        padding: 18,
+        borderRadius: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: "#eee",
     },
 
     activeBox: {
         flex: 1,
-        backgroundColor: "#a0f399",
-        padding: 16,
-        borderRadius: 12,
+        backgroundColor: "#dcfce7",
+        padding: 18,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: "#bbf7d0",
+        shadowColor: "#1b6d24",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+        elevation: 3,
+    },
+
+    activeBoxInactive: {
+        backgroundColor: "#f8f9fc",
+        borderColor: "#e2e8f0",
+        shadowColor: "#000",
     },
 
     statLabel: {
         fontSize: 10,
         color: "#777",
-        marginBottom: 6,
+        fontWeight: "700",
+        letterSpacing: 0.5,
+        marginBottom: 10,
+    },
+
+    statLabelInactive: {
+        color: "#94a3b8",
     },
 
     statRow: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 5,
+        gap: 6,
     },
 
     statNumber: {
-        fontSize: 22,
+        fontSize: 26,
         fontWeight: "bold",
         color: "#0040a1",
     },
@@ -232,53 +313,78 @@ const styles = StyleSheet.create({
     statSub: {
         fontSize: 12,
         color: "#666",
+        marginTop: 4,
     },
 
     activeText: {
-        fontSize: 18,
+        fontSize: 22,
         fontWeight: "bold",
+        color: "#1b6d24",
+        marginBottom: 4,
+    },
+
+    activeTextInactive: {
+        color: "#64748b",
     },
 
     activeSub: {
         fontSize: 11,
         color: "#333",
+        lineHeight: 16,
+    },
+
+    activeSubInactive: {
+        color: "#94a3b8",
     },
 
     card: {
         backgroundColor: "#fff",
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 20,
+        padding: 20,
+        borderRadius: 16,
+        marginBottom: 24,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: "#eee",
     },
 
     cardTitle: {
         fontSize: 16,
         fontWeight: "bold",
-        marginBottom: 10,
+        marginBottom: 14,
+        color: "#1a237e",
     },
 
     infoBlock: {
-        marginBottom: 10,
+        marginBottom: 14,
     },
 
     label: {
         fontSize: 10,
         color: "#777",
+        fontWeight: "600",
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
+        marginBottom: 4,
     },
 
     value: {
         fontSize: 14,
         fontWeight: "600",
+        color: "#1a237e",
     },
 
     email: {
         color: "#0040a1",
         fontWeight: "600",
+        fontSize: 14,
     },
 
     row: {
         flexDirection: "row",
-        justifyContent: "space-between",
     },
 
     actions: {
@@ -288,41 +394,49 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 16,
         fontWeight: "bold",
-        marginBottom: 10,
+        marginBottom: 12,
+        color: "#1a237e",
     },
 
     actionBtn: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: 14,
-        backgroundColor: "#eee",
-        borderRadius: 10,
+        padding: 16,
+        backgroundColor: "#fff",
+        borderRadius: 12,
         marginBottom: 10,
+        borderWidth: 1,
+        borderColor: "#eee",
     },
 
     actionLeft: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 10,
+        gap: 12,
     },
 
     actionText: {
         fontWeight: "600",
+        color: "#1a237e",
+        fontSize: 14,
     },
 
     logoutBtn: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 10,
-        padding: 14,
-        backgroundColor: "#ffdad6",
-        borderRadius: 10,
+        gap: 12,
+        padding: 16,
+        backgroundColor: "#fff5f5",
+        borderRadius: 12,
         marginTop: 10,
+        borderWidth: 1,
+        borderColor: "#fecaca",
     },
 
     logoutText: {
         color: "#ba1a1a",
         fontWeight: "bold",
+        fontSize: 14,
     },
 });
