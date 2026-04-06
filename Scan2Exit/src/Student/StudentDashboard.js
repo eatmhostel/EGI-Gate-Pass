@@ -1,4 +1,4 @@
-import { React, useContext, useState, useEffect, useCallback } from "react";
+import React, { useContext, useState, useEffect, useCallback } from "react";
 import {
     View,
     Text,
@@ -14,7 +14,7 @@ import Footer from "../components/FooterStudent";
 import { MaterialIcons } from "@expo/vector-icons";
 import { AuthContext } from "../context/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { EXPO_PUBLIC_API_URL } from "@env";
+import { authGet } from "../../utils/api";
 
 // ✅ Calculate live remaining time
 function getTimeRemaining(validUntil) {
@@ -66,12 +66,11 @@ export default function StudentDashboard() {
         getId();
     }, []);
 
-    // Fetch Dashboard Data
+    // ✅ UPDATED: Using authGet
     const fetchDashboard = useCallback(async () => {
         if (!studentId) return;
         try {
-            const res = await fetch(`${EXPO_PUBLIC_API_URL}/gatepass/dashboard/${studentId}`);
-            const data = await res.json();
+            const data = await authGet(`/gatepass/student-dashboard/${studentId}`);
             if (data.success) {
                 setActivePass(data.activePass);
                 setRecentRequests(data.recentRequests);
@@ -113,7 +112,10 @@ export default function StudentDashboard() {
     return (
         <View style={styles.container}>
             <Navbar />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+            <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                contentContainerStyle={{ paddingBottom: 120 }}
+            >
                 
                 {/* Validity Banner */}
                 <View style={[styles.validity, isValid ? styles.validityActive : styles.validityInactive]}>
@@ -129,12 +131,18 @@ export default function StudentDashboard() {
                         <Text style={styles.highlight}>{user?.name || "Student"}</Text>
                     </Text>
                     <Text style={styles.subtitle}>
-                        {isValid ? "Your campus access is currently active." : "You have no active gate pass right now."}
+                        {isValid 
+                            ? "Your campus access is currently active." 
+                            : "You have no active gate pass right now."
+                        }
                     </Text>
                 </View>
 
                 {/* Create Pass */}
-                <TouchableOpacity style={styles.createPass} onPress={() => navigation.navigate("Request")}>
+                <TouchableOpacity 
+                    style={styles.createPass} 
+                    onPress={() => navigation.navigate("Request")}
+                >
                     <MaterialIcons name="add-card" size={30} color="#fff" />
                     <Text style={styles.createTitle}>Create Gate Pass</Text>
                     <Text style={styles.createDesc}>Request a new entry or exit permit.</Text>
@@ -142,8 +150,14 @@ export default function StudentDashboard() {
 
                 <View style={styles.row}>
                     <View style={styles.card}>
-                        <MaterialIcons name={isValid ? "outdoor-grill" : "location-on"} size={24} color={isValid ? "#1b6d24" : "#777"} />
-                        <Text style={styles.cardTitle}>{isValid ? "Outside Campus" : "Inside Campus"}</Text>
+                        <MaterialIcons 
+                            name={isValid ? "outdoor-grill" : "location-on"} 
+                            size={24} 
+                            color={isValid ? "#1b6d24" : "#777"} 
+                        />
+                        <Text style={styles.cardTitle}>
+                            {isValid ? "Outside Campus" : "Inside Campus"}
+                        </Text>
                         <Text style={styles.cardText}>
                             {isValid ? `Dest: ${activePass.destination}` : "No active pass"}
                         </Text>
@@ -160,7 +174,9 @@ export default function StudentDashboard() {
                 <View style={styles.activityCard}>
                     <View style={styles.headerRow}>
                         <Text style={styles.sectionTitle}>Recent Activity</Text>
-                        <TouchableOpacity onPress={() => navigation.navigate("StudentHistory")}>
+                        <TouchableOpacity 
+                            onPress={() => navigation.navigate("StudentHistory")}
+                        >
                             <Text style={styles.history}>History</Text>
                         </TouchableOpacity>
                     </View>
@@ -187,13 +203,18 @@ export default function StudentDashboard() {
                                             {item.destination} • #{item._id.slice(-5).toUpperCase()}
                                         </Text>
                                     </View>
-                                    <Text style={styles.activityDate}>{formatDateTime(item.createdAt)}</Text>
+                                    <Text style={styles.activityDate}>
+                                        {formatDateTime(item.createdAt)}
+                                    </Text>
                                 </TouchableOpacity>
                             );
                         })
                     )}
 
-                    <TouchableOpacity style={styles.viewAllContainer} onPress={() => navigation.navigate("History")}>
+                    <TouchableOpacity 
+                        style={styles.viewAllContainer} 
+                        onPress={() => navigation.navigate("History")}
+                    >
                         <Text style={styles.viewAllText}>View All Requests</Text>
                         <MaterialIcons name="arrow-forward" size={18} color="#0040a1" />
                     </TouchableOpacity>
@@ -207,7 +228,9 @@ export default function StudentDashboard() {
                     />
                     <View style={styles.policyContent}>
                         <Text style={styles.policyTitle}>Campus Policy Update</Text>
-                        <Text style={styles.policyText}>Gate passes will require 2FA authentication soon.</Text>
+                        <Text style={styles.policyText}>
+                            Gate passes will require 2FA authentication soon.
+                        </Text>
                         <Text style={styles.learnMore}>Learn More</Text>
                     </View>
                 </View>
@@ -239,8 +262,22 @@ const styles = StyleSheet.create({
     },
     validityActive: { backgroundColor: "#1b6d24" },
     validityInactive: { backgroundColor: "#64748b" },
-    validityText: { color: "#fff", fontSize: 13, flex: 1, marginLeft: 10, fontWeight: "500" },
-    validityTime: { color: "#fff", fontWeight: "bold", fontSize: 15, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
+    validityText: { 
+        color: "#fff", 
+        fontSize: 13, 
+        flex: 1, 
+        marginLeft: 10, 
+        fontWeight: "500" 
+    },
+    validityTime: { 
+        color: "#fff", 
+        fontWeight: "bold", 
+        fontSize: 15, 
+        backgroundColor: "rgba(255,255,255,0.2)", 
+        paddingHorizontal: 12, 
+        paddingVertical: 4, 
+        borderRadius: 8 
+    },
 
     welcome: { paddingHorizontal: 15, marginBottom: 10 },
     title: { fontSize: 40, fontWeight: "bold", lineHeight: 48 },
@@ -332,7 +369,12 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderColor: "#eee",
     },
-    viewAllText: { fontSize: 14, fontWeight: "bold", color: "#0040a1", marginRight: 6 },
+    viewAllText: { 
+        fontSize: 14, 
+        fontWeight: "bold", 
+        color: "#0040a1", 
+        marginRight: 6 
+    },
 
     policyCard: {
         margin: 15,

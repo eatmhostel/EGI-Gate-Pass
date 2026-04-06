@@ -9,7 +9,8 @@ import {
     ActivityIndicator,
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { EXPO_PUBLIC_API_URL } from "@env";
+import { authGet } from "../../utils/api";
+
 import Navbar from "../components/Navbar";
 import FooterSecurity from "../components/FooterSecurity";
 
@@ -17,7 +18,6 @@ const FILTERS = [
     { key: "all", label: "All" },
     { key: "exit", label: "Exits" },
     { key: "enter", label: "Entries" },
-    { key: "denied", label: "Denied" },
 ];
 
 const fmtTime = (d) =>
@@ -35,6 +35,14 @@ const fmtDate = (d) =>
               month: "short",
           })
         : "";
+
+// ✅ FIX: Format manual times properly
+const formatManualTime = (outTime, inTime) => {
+    const parts = [];
+    if (outTime) parts.push(`Out: ${fmtTime(outTime)}`);
+    if (inTime) parts.push(`In: ${fmtTime(inTime)}`);
+    return parts.length > 0 ? parts.join("  |  ") : "";
+};
 
 const getInitials = (name) =>
     name
@@ -55,16 +63,38 @@ export default function SecurityHistory() {
     const fetchHistory = useCallback(async () => {
         try {
             setLoading(true);
-            const [hRes, sRes] = await Promise.all([
-                fetch(
-                    `${EXPO_PUBLIC_API_URL}/security-scans/history?filter=${filter}&limit=60`
-                ),
-                fetch(`${EXPO_PUBLIC_API_URL}/security-scans/today-stats`),
+            
+            const [hData, sData, mData] = await Promise.all([
+                authGet(`/security-scans/history?filter=${filter}&limit=60`),
+                authGet(`/security-scans/today-stats`),
+                authGet(`/manual-entries/today`)
             ]);
-            const hData = await hRes.json();
-            const sData = await sRes.json();
-            if (hData.success) setScans(hData.scans);
+
+            // ✅ FIX: Properly map manual entries with separate times
+            const formattedManual = (mData.entries || []).map((m) => ({
+                _id: m._id,
+                studentName: m.name,
+                studentRegNo: m.regNo,
+                action: m.currentAction || "exit", // ✅ Default to exit if missing
+                status: "allowed", // ✅ Manual entries are never denied
+                createdAt: m.currentAction === "entry" 
+                    ? (m.entryTime || m.createdAt) 
+                    : (m.exitTime || m.createdAt),
+                scannedBy: m.scannedBy,
+                gatePass: { destination: m.destination }, 
+                student: { fullName: m.name, regNo: m.regNo, course: m.course },
+                isManual: true,       
+                entryType: m.type,
+                scannedOutAt: m.exitTime,     // ✅ Separate times
+                scannedInAt: m.entryTime       // ✅ Separate times
+            }));
+
+            const combined = [...(hData.scans || []), ...formattedManual].sort(
+                (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+            );
+
             if (sData.success) setStats(sData.stats);
+            setScans(combined);
         } catch (err) {
             console.log("History fetch error:", err);
         } finally {
@@ -84,15 +114,10 @@ export default function SecurityHistory() {
             <ScrollView
                 contentContainerStyle={styles.scroll}
                 showsVerticalScrollIndicator={false}
-                refreshControl={
-                    // Simple pull-to-refresh via a refresh button instead
-                    null
-                }
             >
-                {/* Header */}
                 <Text style={styles.heading}>Scan History</Text>
                 <Text style={styles.subheading}>
-                    View all verified entries and exits.
+                    View all verified entries, exits, and manual logs.
                 </Text>
 
                 {/* ── Today's Stats ─────────────────── */}
@@ -100,15 +125,11 @@ export default function SecurityHistory() {
                     <View style={styles.statsRow}>
                         <View style={[styles.statCard, { borderLeftColor: "#f59e0b" }]}>
                             <Text style={styles.statNum}>{stats.exits}</Text>
-                            <Text style={styles.statLabel}>Exits</Text>
+                            <Text style={styles.statLabel}>Total Exits</Text>
                         </View>
                         <View style={[styles.statCard, { borderLeftColor: "#16a34a" }]}>
                             <Text style={styles.statNum}>{stats.entries}</Text>
-                            <Text style={styles.statLabel}>Entries</Text>
-                        </View>
-                        <View style={[styles.statCard, { borderLeftColor: "#dc2626" }]}>
-                            <Text style={styles.statNum}>{stats.denied}</Text>
-                            <Text style={styles.statLabel}>Denied</Text>
+                            <Text style={styles.statLabel}>Total Entries</Text>
                         </View>
                     </View>
                 )}
@@ -127,8 +148,7 @@ export default function SecurityHistory() {
                             <Text
                                 style={[
                                     styles.filterChipText,
-                                    filter === f.key &&
-                                        styles.filterChipTextActive,
+                                    filter === f.key && styles.filterChipTextActive,
                                 ]}
                             >
                                 {f.label}
@@ -158,91 +178,87 @@ export default function SecurityHistory() {
                     </View>
                 ) : (
                     scans.map((item) => {
-                        const isExit =
-                            item.action === "exit" && item.status === "allowed";
-                        const isEnter =
-                            item.action === "enter" && item.status === "allowed";
-                        const isDenied = item.status === "denied";
+                        // ✅ FIX: Simplified logic - manual entries never denied
+                        const isExit = item.action === "exit" && !item.isManual;
+                        const isEnter = item.action === "enter" && !item.isManual;
+                        const isManualExit = item.action === "exit" && item.isManual;
+                        const isManualEnter = item.action === "enter" && item.isManual;
+                        const isDenied = !item.isManual && item.status === "denied";
+                        
                         const stu = item.student || {};
                         const gp = item.gatePass || {};
 
-                        const badgeBg = isExit
-                            ? "#fffbeb"
-                            : isEnter
-                            ? "#f0fdf4"
-                            : "#fef2f2";
-                        const badgeText = isExit
-                            ? "#b45309"
-                            : isEnter
-                            ? "#15803d"
-                            : "#dc2626";
-                        const badgeLabel = isExit
-                            ? "EXIT"
-                            : isEnter
-                            ? "ENTER"
-                            : "DENIED";
-                        const avatarBg = isExit
-                            ? "#f59e0b"
-                            : isEnter
-                            ? "#16a34a"
-                            : "#dc2626";
+                        // ✅ FIX: Correct styling based on action
+                        const badgeBg = isDenied 
+                            ? "#fef2f2" 
+                            : (isExit || isManualExit) 
+                                ? "#fffbeb" 
+                                : "#f0fdf4";
+                        const badgeText = isDenied 
+                            ? "#dc2626" 
+                            : (isExit || isManualExit) 
+                                ? "#b45309" 
+                                : "#15803d";
+                        const badgeLabel = isDenied 
+                            ? "DENIED" 
+                            : (isExit || isManualExit) 
+                                ? "EXIT" 
+                                : "ENTER";
+                        const avatarBg = isDenied 
+                            ? "#dc2626" 
+                            : (isExit || isManualExit) 
+                                ? "#f59e0b" 
+                                : "#16a34a";
+
+                        // ✅ FIX: Format time display
+                        const displayTime = item.isManual 
+                            ? formatManualTime(item.scannedOutAt, item.scannedInAt)
+                            : fmtTime(item.createdAt);
 
                         return (
                             <View key={item._id} style={styles.scanItem}>
                                 {/* Avatar */}
                                 <View
-                                    style={[
-                                        styles.avatar,
-                                        { backgroundColor: avatarBg },
-                                    ]}
+                                    style={[styles.avatar, { backgroundColor: avatarBg }]}
                                 >
                                     <Text style={styles.avatarText}>
-                                        {getInitials(
-                                            item.studentName || stu.fullName
-                                        )}
+                                        {getInitials(item.studentName || stu.fullName)}
                                     </Text>
                                 </View>
 
                                 {/* Info */}
                                 <View style={styles.scanInfo}>
-                                    <Text style={styles.name}>
-                                        {item.studentName || stu.fullName || "Unknown"}
-                                    </Text>
+                                    <View style={styles.nameRow}>
+                                        <Text style={styles.name}>
+                                            {item.studentName || stu.fullName || "Unknown"}
+                                        </Text>
+                                        {item.isManual && (
+                                            <View style={styles.manualTag}>
+                                                <MaterialIcons name="edit" size={10} color="#fff" />
+                                                <Text style={styles.manualTagText}>
+                                                    {item.entryType === 'visitor' ? "VISITOR" : "MANUAL"}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    
                                     <Text style={styles.subText}>
                                         {[
                                             item.studentRegNo || stu.regNo,
                                             gp.destination,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(" • ")}
+                                        ].filter(Boolean).join(" • ")}
                                     </Text>
                                     {isDenied && item.denyReason && (
-                                        <Text style={styles.denyReason}>
-                                            {item.denyReason}
-                                        </Text>
+                                        <Text style={styles.denyReason}>{item.denyReason}</Text>
                                     )}
                                 </View>
 
                                 {/* Time + Badge */}
                                 <View style={styles.scanMeta}>
-                                    <Text style={styles.time}>
-                                        {fmtTime(item.createdAt)}
-                                    </Text>
-                                    <Text style={styles.date}>
-                                        {fmtDate(item.createdAt)}
-                                    </Text>
-                                    <View
-                                        style={[
-                                            styles.badge,
-                                            { backgroundColor: badgeBg },
-                                        ]}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.badgeText,
-                                                { color: badgeText },
-                                            ]}
-                                        >
+                                    <Text style={styles.time}>{displayTime || fmtTime(item.createdAt)}</Text>
+                                    <Text style={styles.date}>{fmtDate(item.createdAt)}</Text>
+                                    <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                                        <Text style={[styles.badgeText, { color: badgeText }]}>
                                             {badgeLabel}
                                         </Text>
                                     </View>
@@ -297,13 +313,9 @@ const styles = StyleSheet.create({
 
     /* filters */
     filterRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-    filterChip: {
-        paddingHorizontal: 14,
-        paddingVertical: 7,
-        borderRadius: 20,
-        backgroundColor: "#e8eaf6",
-    },
+    filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: "#e8eaf6" },
     filterChipActive: { backgroundColor: "#1a237e" },
+    filterText: { fontSize: 13, fontWeight: "600", color: "#5c6bc0" },
     filterChipText: { fontSize: 13, fontWeight: "600", color: "#5c6bc0" },
     filterChipTextActive: { color: "#fff" },
 
@@ -331,11 +343,24 @@ const styles = StyleSheet.create({
     },
     avatarText: { color: "#fff", fontSize: 15, fontWeight: "700" },
     scanInfo: { flex: 1 },
-    name: { fontWeight: "700", fontSize: 15, color: "#263238" },
+    nameRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+    name: { fontWeight: "700", fontSize: 15, color: "#263238", flexShrink: 1 },
+    
+    manualTag: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#ff9800",
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        gap: 3,
+    },
+    manualTagText: { fontSize: 8, fontWeight: "800", color: "#fff", letterSpacing: 0.5 },
+
     subText: { fontSize: 12, color: "#78909c", marginTop: 2 },
     denyReason: { fontSize: 11, color: "#dc2626", marginTop: 3, fontStyle: "italic" },
     scanMeta: { alignItems: "flex-end", gap: 2 },
-    time: { fontSize: 13, color: "#37474f", fontWeight: "600" },
+    time: { fontSize: 12, color: "#37474f", fontWeight: "600", maxWidth: 120, textAlign: "right" },
     date: { fontSize: 11, color: "#90a4ae" },
     badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 4 },
     badgeText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },

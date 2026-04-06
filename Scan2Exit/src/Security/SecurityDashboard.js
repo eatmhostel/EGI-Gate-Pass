@@ -12,7 +12,8 @@ import {
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { EXPO_PUBLIC_API_URL } from "@env";
+
+import { authGet } from "../../utils/api";
 
 import Navbar from "../components/Navbar";
 import FooterSecurity from "../components/FooterSecurity";
@@ -60,29 +61,29 @@ export default function SecurityDashboard() {
     const navigation = useNavigation();
     const [stats, setStats] = useState(null);
     const [recentScans, setRecentScans] = useState([]);
+    const [manualEntries, setManualEntries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [isLive, setIsLive] = useState(false);
     const intervalRef = useRef(null);
 
+    // ✅ UPDATED: Using authGet instead of fetch
     const fetchData = useCallback(async (isRefresh = false) => {
         if (isRefresh) setRefreshing(true);
-        else if (!stats) setLoading(true); // Only show spinner on initial load
+        else if (!stats) setLoading(true);
 
         try {
-            const [sRes, hRes] = await Promise.all([
-                fetch(`${EXPO_PUBLIC_API_URL}/security-scans/today-stats`),
-                fetch(
-                    `${EXPO_PUBLIC_API_URL}/security-scans/history?filter=all&limit=5`
-                ),
+            // ✅ Clean API calls using authGet
+            const [sData, hData, mData] = await Promise.all([
+                authGet("/security-scans/today-stats"),
+                authGet("/security-scans/history?filter=all&limit=5"),
+                authGet("/manual-entries/today")
             ]);
-
-            const sData = await sRes.json();
-            const hData = await hRes.json();
 
             if (sData.success) setStats(sData.stats);
             if (hData.success) setRecentScans(hData.scans);
-            
+            if (mData.success) setManualEntries(mData.entries);
+
             setIsLive(true);
         } catch (err) {
             console.log("Dashboard fetch error:", err);
@@ -166,6 +167,7 @@ export default function SecurityDashboard() {
                         <TouchableOpacity
                             style={styles.secondaryBtn}
                             activeOpacity={0.8}
+                            onPress={() => navigation.navigate("ManualEntry")}
                         >
                             <MaterialIcons
                                 name="edit"
@@ -265,21 +267,6 @@ export default function SecurityDashboard() {
                                     Awaiting return
                                 </Text>
                             </View>
-                        </View>
-
-                        {/* Denied row */}
-                        <View style={styles.deniedRow}>
-                            <MaterialIcons
-                                name="block"
-                                size={16}
-                                color="#c62828"
-                            />
-                            <Text style={styles.deniedText}>
-                                <Text style={styles.deniedNum}>
-                                    {stats.denied}
-                                </Text>{" "}
-                                denied today
-                            </Text>
                         </View>
                     </>
                 ) : null}
@@ -391,6 +378,49 @@ export default function SecurityDashboard() {
                         </View>
                     );
                 })}
+
+                {/* ── Manual Entries Section ─────────────── */}
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Manual Entries</Text>
+                    <TouchableOpacity
+                        onPress={() => navigation.navigate("ManualEntry")}
+                    >
+                        <Text style={styles.viewAllText}>+ New</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {manualEntries.length === 0 ? (
+                    <View style={styles.emptyBox}>
+                        <MaterialIcons name="note-add" size={48} color="#c5cae9" />
+                        <Text style={styles.emptyText}>No manual entries today</Text>
+                    </View>
+                ) : (
+                    manualEntries.map((item) => (
+                        <TouchableOpacity 
+                            key={item._id} 
+                            style={styles.manualItem}
+                            onPress={() => navigation.navigate("ManualEntryDetails", { entryId: item._id })}
+                        >
+                            <View style={[styles.manualAvatar, { backgroundColor: item.type === 'student' ? "#e3f2fd" : "#fff3e0" }]}>
+                                <MaterialIcons name={item.type === 'student' ? "school" : "person-pin"} size={22} color={item.type === 'student' ? "#1565c0" : "#e65100"} />
+                            </View>
+                            <View style={styles.manualInfo}>
+                                <Text style={styles.name}>{item.name}</Text>
+                                <Text style={styles.subText}>
+                                    {item.destination} {item.type === 'student' ? `• ${item.regNo}` : `• Visitor`}
+                                </Text>
+                            </View>
+                            <View style={styles.scanMeta}>
+                                <Text style={styles.time}>{fmtTime(item.createdAt)}</Text>
+                                <View style={[styles.badge, { backgroundColor: item.currentAction === 'entry' ? '#f0fdf4' : '#fffbeb' }]}>
+                                    <Text style={[styles.badgeText, { color: item.currentAction === 'entry' ? '#15803d' : '#b45309' }]}>
+                                        {item.currentAction.toUpperCase()}
+                                    </Text>
+                                </View>
+                            </View>
+                        </TouchableOpacity>
+                    ))
+                )}
 
                 <View style={{ height: 100 }} />
             </ScrollView>
@@ -747,6 +777,32 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: "800",
         letterSpacing: 0.5,
+    },
+
+    /* ── Manual Entry Items ─────────────────────────── */
+    manualItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#fff",
+        padding: 14,
+        borderRadius: 14,
+        marginBottom: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    manualAvatar: {
+        width: 46,
+        height: 46,
+        borderRadius: 12,
+        justifyContent: "center",
+        alignItems: "center",
+        marginRight: 14,
+    },
+    manualInfo: {
+        flex: 1,
     },
 
     /* ── Empty ────────────────────────────────────────── */

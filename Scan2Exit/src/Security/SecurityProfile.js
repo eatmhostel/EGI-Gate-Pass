@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useContext } from "react";
 import {
     View,
     Text,
@@ -13,13 +13,12 @@ import {
     Animated,
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { EXPO_PUBLIC_API_URL } from "@env";
+import { authGet } from "../../utils/api";
+import { AuthContext } from "../context/AuthContext";
+import { useNavigation } from "@react-navigation/native";
 
 import Navbar from "../components/Navbar";
 import FooterSecurity from "../components/FooterSecurity";
-import { useContext } from "react";
-import { AuthContext } from "../context/AuthContext";
-import { useNavigation } from "@react-navigation/native";
 
 /* ── Animated Pulse Dot ────────────────────────────── */
 function LiveDot() {
@@ -73,7 +72,7 @@ const getInitials = (name) =>
         : "?";
 
 export default function SecurityProfile() {
-    const { user, setUser } = useContext(AuthContext);
+    const { user, clearSession } = useContext(AuthContext); // ✅ Use clearSession
     const navigation = useNavigation();
     const [myStats, setMyStats] = useState(null);
     const [myScans, setMyScans] = useState([]);
@@ -89,17 +88,11 @@ export default function SecurityProfile() {
         try {
             const scannedBy = user?.name || "Security";
 
-            const [sRes, hRes] = await Promise.all([
-                fetch(
-                    `${EXPO_PUBLIC_API_URL}/security-scans/today-stats?scannedBy=${encodeURIComponent(scannedBy)}`
-                ),
-                fetch(
-                    `${EXPO_PUBLIC_API_URL}/security-scans/history?filter=all&limit=10&scannedBy=${encodeURIComponent(scannedBy)}`
-                ),
+            // ✅ FIXED: Using authGet (automatically attaches token)
+            const [sData, hData] = await Promise.all([
+                authGet(`/security-scans/today-stats?scannedBy=${encodeURIComponent(scannedBy)}`),
+                authGet(`/security-scans/history?filter=all&limit=10&scannedBy=${encodeURIComponent(scannedBy)}`),
             ]);
-
-            const sData = await sRes.json();
-            const hData = await hRes.json();
 
             if (sData.success) setMyStats(sData.stats);
             if (hData.success) setMyScans(hData.scans);
@@ -130,13 +123,14 @@ export default function SecurityProfile() {
         };
     }, [fetchMyData]);
 
+    // ✅ FIXED Logout
     const handleLogout = () => {
         Alert.alert("Logout", "Are you sure you want to logout?", [
             { text: "Cancel", style: "cancel" },
             {
                 text: "Logout",
-                onPress: () => {
-                    setUser(null);
+                onPress: async () => {
+                    await clearSession(); // Clear JWT and AsyncStorage
                     navigation.reset({
                         index: 0,
                         routes: [{ name: "Home" }],
@@ -371,8 +365,6 @@ export default function SecurityProfile() {
                         const badgeLabel = isExit ? "EXIT" : isEnter ? "ENTER" : "DENIED";
 
                         const actionIcon = isExit ? "logout" : isEnter ? "login" : "block";
-                        const actionColor = isExit ? "#f59e0b" : isEnter ? "#16a34a" : "#dc2626";
-
                         const stu = item.student || {};
 
                         return (

@@ -1,22 +1,20 @@
 const express = require("express");
 const router = express.Router();
-const controller = require("../controllers/gatePassController");
+const gatePassController = require("../controllers/gatePassController");
+const studentAuth = require("../middleware/studentAuth");
+const adminAuth = require("../middleware/adminAuth");
 
-// student request
-router.post("/request", controller.createRequest);
+// ✅ Admin Routes (Protected) — MUST come BEFORE /:id
+router.get("/pending", adminAuth, gatePassController.getPendingRequests);
+router.get("/pending-home", adminAuth, gatePassController.getPendingHomeRequests);
+router.get("/count-pending-home", adminAuth, gatePassController.countPendingHome);
+router.put("/approve/:id", adminAuth, gatePassController.approveRequest);
+router.put("/reject/:id", adminAuth, gatePassController.rejectRequest);
 
-// admin
-router.get("/pending", controller.getPendingRequests);
-router.get("/pending-home", controller.getPendingHomeRequests);
-router.get("/pending-home/count", controller.countPendingHome);
-router.put("/approve/:id", controller.approveRequest);
-router.put("/reject/:id", controller.rejectRequest);
-
-// student dashboard & history (MUST be before /:id to avoid route collision)
-router.get("/dashboard/:studentId", controller.getStudentDashboard);
-router.get("/student/:studentId", controller.getRequestsByStudent);
-
-// dynamic id
-router.get("/:id", controller.getRequestById);
+// ✅ Student Routes (Protected) — /:id MUST come LAST
+router.post("/create", studentAuth, gatePassController.createRequest);
+router.get("/student/:studentId", studentAuth, gatePassController.getRequestsByStudent);
+router.get("/student-dashboard/:studentId", studentAuth, gatePassController.getStudentDashboard);
+router.get("/:id", studentAuth, gatePassController.getRequestById);
 
 module.exports = router;

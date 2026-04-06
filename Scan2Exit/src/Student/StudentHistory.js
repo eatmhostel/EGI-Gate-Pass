@@ -8,10 +8,9 @@ import {
     ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import axios from "axios";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { EXPO_PUBLIC_API_URL } from "@env";
+import { authGet } from "../../utils/api";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/FooterStudent";
@@ -129,15 +128,15 @@ export default function StudentHistory() {
         }
     };
 
-    const API_URL = EXPO_PUBLIC_API_URL;
-
+    // ✅ FIXED: Replaced axios with authGet (automatically sends token)
     const fetchHistory = async () => {
         try {
-            const res = await axios.get(
-                `${API_URL}/gatepass/student/${studentId}`
-            );
-            if (res.data.success) {
-                setHistory(res.data.requests);
+            const data = await authGet(`/gatepass/student/${studentId}`);
+            
+            if (data.success) {
+                setHistory(data.requests);
+            } else {
+                console.log("Fetch error:", data.message);
             }
         } catch (err) {
             console.log("ERROR:", err.message);

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, ActivityIndicator } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { EXPO_PUBLIC_API_URL } from "@env";
+import { authGet, authDelete } from "../../utils/api";
+
 import Navbar from "../components/Navbar";
 import FooterAdmin from "../components/FooterAdmin";
 
@@ -11,10 +12,10 @@ export default function AdminStudents() {
 
     useEffect(() => { fetchStudents(); }, []);
 
+    // ✅ FIXED: Correct endpoint + authGet
     const fetchStudents = async () => {
         try {
-            const res = await fetch(`${EXPO_PUBLIC_API_URL}/admin/students`);
-            const data = await res.json();
+            const data = await authGet("/admin/all-students");
             if (data.success) setStudents(data.students);
         } catch (err) { console.log(err); }
         finally { setLoading(false); }
@@ -26,8 +27,13 @@ export default function AdminStudents() {
             {
                 text: "Delete", style: "destructive",
                 onPress: async () => {
-                    await fetch(`${EXPO_PUBLIC_API_URL}/admin/student/${id}`, { method: "DELETE" });
-                    setStudents((prev) => prev.filter((s) => s._id !== id));
+                    // ✅ FIXED: Correct endpoint + authDelete
+                    const data = await authDelete(`/admin/delete-student/${id}`);
+                    if (data.success) {
+                        setStudents((prev) => prev.filter((s) => s._id !== id));
+                    } else {
+                        Alert.alert("Error", data.message || "Failed to delete");
+                    }
                 }
             }
         ]);

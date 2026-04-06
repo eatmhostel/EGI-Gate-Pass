@@ -7,18 +7,18 @@ import {
     Image,
     TouchableOpacity,
     ActivityIndicator,
+    Alert,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { AuthContext } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/FooterStudent";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { EXPO_PUBLIC_API_URL } from "@env";
 import { useNavigation } from "@react-navigation/native";
+import { authGet } from "../../utils/api";
 
 export default function StudentProfile() {
-    const { user, setUser } = useContext(AuthContext);
-    const [showMenu, setShowMenu] = useState(false);
+    const { user, clearSession } = useContext(AuthContext); // ✅ Use clearSession
     const navigation = useNavigation();
     const [totalPasses, setTotalPasses] = useState(0);
     const [hasActivePass, setHasActivePass] = useState(false);
@@ -30,12 +30,14 @@ export default function StudentProfile() {
                 const studentId = await AsyncStorage.getItem("studentId");
                 if (!studentId) return;
 
-                const res = await fetch(`${EXPO_PUBLIC_API_URL}/gatepass/dashboard/${studentId}`);
-                const data = await res.json();
+                // ✅ FIXED: Correct endpoint + authGet automatically sends token
+                const data = await authGet(`/gatepass/student-dashboard/${studentId}`);
 
                 if (data.success) {
                     setTotalPasses(data.totalPasses || 0);
                     setHasActivePass(!!data.activePass);
+                } else {
+                    Alert.alert("Error", data.message || "Failed to load stats");
                 }
             } catch (err) {
                 console.log("Failed to fetch profile stats:", err.message);
@@ -53,6 +55,15 @@ export default function StudentProfile() {
             return `+91 ${phone.slice(0, 5)} ${phone.slice(5)}`;
         }
         return phone;
+    };
+
+    // ✅ FIXED Logout using clearSession
+    const handleLogout = async () => {
+        await clearSession();
+        navigation.reset({
+            index: 0,
+            routes: [{ name: "Home" }],
+        });
     };
 
     return (
@@ -144,7 +155,7 @@ export default function StudentProfile() {
                     </View>
 
                     <View style={styles.infoBlock}>
-                        <Text style={styles.label}>Institutional Email</Text>
+                        <Text style={styles.label}>Email</Text>
                         <Text style={styles.email}>{user?.email}</Text>
                     </View>
 
@@ -176,16 +187,8 @@ export default function StudentProfile() {
                         </TouchableOpacity>
                     ))}
 
-                    <TouchableOpacity style={styles.logoutBtn} onPress={() => {
-                        setUser(null);
-                        setShowMenu(false);
-
-                        // ✅ RESET navigation (IMPORTANT)
-                        navigation.reset({
-                            index: 0,
-                            routes: [{ name: "Home" }],
-                        });
-                    }}>
+                    {/* ✅ FIXED LOGOUT BUTTON */}
+                    <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                         <MaterialIcons name="logout" size={20} color="#ba1a1a" />
                         <Text style={styles.logoutText}>Logout Account</Text>
                     </TouchableOpacity>

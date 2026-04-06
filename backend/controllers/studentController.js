@@ -1,5 +1,6 @@
 const Student = require("../models/Student");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 // ✅ REGISTER
 exports.registerStudent = async (req, res) => {
@@ -36,7 +37,7 @@ exports.registerStudent = async (req, res) => {
   }
 };
 
-// ✅ LOGIN (ONLY APPROVED)
+// ✅ LOGIN WITH JWT TOKEN
 exports.loginStudent = async (req, res) => {
   try {
     const { regNo, password } = req.body;
@@ -60,8 +61,25 @@ exports.loginStudent = async (req, res) => {
       return res.json({ success: false, message: "Wrong password" });
     }
 
+    // Generate JWT Token
+    const token = jwt.sign(
+      { 
+        id: student._id, 
+        name: student.fullName,
+        regNo: student.regNo,
+        course: student.course,
+        branch: student.branch,
+        email: student.email,
+        phone: student.phone,
+        role: "student" 
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || "30d" }
+    );
+
     res.json({
       success: true,
+      token,
       user: {
         _id: student._id,
         name: student.fullName,
@@ -75,4 +93,12 @@ exports.loginStudent = async (req, res) => {
   } catch (err) {
     res.json({ success: false, message: "Server error" });
   }
+};
+
+// ✅ VERIFY TOKEN (Keep session alive)
+exports.verifyStudent = (req, res) => {
+  return res.json({ 
+    success: true, 
+    user: req.user 
+  });
 };

@@ -12,6 +12,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { EXPO_PUBLIC_API_URL } from "@env";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ✅ Import AuthContext
 import { AuthContext } from "../context/AuthContext";
@@ -55,8 +56,8 @@ export default function Scanner() {
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
 
-    // ✅ Get actual user name
-    const { user } = useContext(AuthContext);
+    // ✅ Get user from AuthContext
+    const { user, token } = useContext(AuthContext);
     const navigation = useNavigation();
     const scanLineAnim = useRef(new Animated.Value(0)).current;
     const overlayOpacity = useRef(new Animated.Value(0)).current;
@@ -117,19 +118,49 @@ export default function Scanner() {
         Vibration.vibrate(80);
 
         try {
+            // ✅ FIX: Get token from AsyncStorage if not in context
+            const authToken = token || await AsyncStorage.getItem("authToken");
+            
+            if (!authToken) {
+                setLoading(false);
+                setResult({
+                    success: false,
+                    message: "Authentication error. Please login again.",
+                });
+                return;
+            }
+
             const res = await fetch(
                 `${EXPO_PUBLIC_API_URL}/security-scans/verify`,
                 {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    // ✅ FIX: Use actual user name instead of hardcoded "Security"
+                    headers: { 
+                        "Content-Type": "application/json",
+                        // ✅ FIX: Add Authorization header with token
+                        "Authorization": `Bearer ${authToken}`,
+                    },
                     body: JSON.stringify({
                         qrData: data,
                         scannedBy: user?.name || "Security",
                     }),
                 }
             );
-            const json = await res.json();
+
+            // ✅ FIX: Safe JSON parsing (read body only once)
+            const responseText = await res.text();
+            let json;
+            try {
+                json = JSON.parse(responseText);
+            } catch (parseError) {
+                console.log("Invalid response:", responseText.substring(0, 100));
+                setLoading(false);
+                setResult({
+                    success: false,
+                    message: "Invalid response from server",
+                });
+                return;
+            }
+
             setLoading(false);
 
             if (json.success) {
@@ -138,11 +169,12 @@ export default function Scanner() {
                 Vibration.vibrate([200, 100, 200]);
             }
             setResult(json);
-        } catch {
+        } catch (error) {
+            console.log("Scan error:", error.message);
             setLoading(false);
             setResult({
                 success: false,
-                message: "Network error. Please try again.",
+                message: "Network error. Please check your connection and try again.",
             });
         }
     };

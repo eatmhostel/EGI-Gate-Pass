@@ -10,11 +10,20 @@ export default function Navbar() {
     Poppins_600SemiBold,
   });
 
-  const { user, setUser } = useContext(AuthContext);
+  const { user, clearSession } = useContext(AuthContext); // ✅ Use clearSession
   const navigation = useNavigation();
   const [showMenu, setShowMenu] = useState(false);
 
   if (!fontsLoaded) return null;
+
+  const handleLogout = async () => {
+    await clearSession(); // ✅ Clear token and user data
+    setShowMenu(false);
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Home" }],
+    });
+  };
 
   return (
     <View style={styles.header}>
@@ -36,7 +45,6 @@ export default function Navbar() {
       {/* Right Side */}
       {user ? (
         <View style={{ position: "relative" }}>
-          {/* User Icon */}
           <TouchableOpacity
             style={styles.loginBtn}
             onPress={() => setShowMenu(!showMenu)}
@@ -44,23 +52,10 @@ export default function Navbar() {
             <MaterialIcons name="account-circle" size={26} color="#fff" />
           </TouchableOpacity>
 
-          {/* Dropdown */}
           {showMenu && (
             <View style={styles.dropdown}>
               <Text style={styles.userName}>{user?.name || "User"}</Text>
-
-              <TouchableOpacity
-                onPress={() => {
-                  setUser(null);
-                  setShowMenu(false);
-
-                  // ✅ RESET navigation (IMPORTANT)
-                  navigation.reset({
-                    index: 0,
-                    routes: [{ name: "Home" }],
-                  });
-                }}
-              >
+              <TouchableOpacity onPress={handleLogout}>
                 <Text style={styles.logout}>Logout</Text>
               </TouchableOpacity>
             </View>
@@ -83,36 +78,31 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 35,
+    paddingTop: 10,
     paddingHorizontal: 20,
     paddingBottom: 10,
     backgroundColor: "#fff",
   },
-
   logoContainer: {
     flexDirection: "row",
     alignItems: "center",
   },
-
   logo: {
     fontSize: 20,
     fontFamily: "Poppins_600SemiBold",
     color: "#0040a1",
     letterSpacing: 0.5,
   },
-
   loginBtn: {
     backgroundColor: "#0040a1",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
   },
-
   loginText: {
     color: "#fff",
     fontWeight: "bold",
   },
-
   dropdown: {
     position: "absolute",
     top: 50,
@@ -121,15 +111,13 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 10,
     elevation: 10,
-    zIndex: 999, // ✅ FIX click issue
+    zIndex: 999,
     minWidth: 120,
   },
-
   userName: {
     fontWeight: "bold",
     marginBottom: 8,
   },
-
   logout: {
     color: "red",
     fontWeight: "bold",

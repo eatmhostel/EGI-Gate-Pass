@@ -9,6 +9,7 @@ import {
     Dimensions,
     KeyboardAvoidingView,
     Platform,
+    Alert,
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from "@expo/vector-icons";
@@ -80,7 +81,10 @@ export default function Register() {
 
         setLoading(true);
         try {
-            const res = await fetch(`${EXPO_PUBLIC_API_URL}/student/register`, {
+            const apiUrl = `${EXPO_PUBLIC_API_URL}/student/register`;
+            console.log("Register API URL:", apiUrl);
+
+            const res = await fetch(apiUrl, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -97,17 +101,54 @@ export default function Register() {
                 }),
             });
 
+            // ✅ Check response status first
+            if (!res.ok) {
+                let errorMsg = `Server error: ${res.status}`;
+                try {
+                    const errorData = await res.json();
+                    errorMsg = errorData.message || errorMsg;
+                } catch (e) {
+                    const text = await res.text();
+                    console.log("Non-JSON error response:", text.substring(0, 200));
+                }
+                throw new Error(errorMsg);
+            }
+
+            // ✅ Safely parse JSON
+            const contentType = res.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error("Server returned invalid response format");
+            }
+
             const data = await res.json();
 
             if (data.success) {
-                alert("Registered successfully! Wait for admin approval.");
-                navigation.navigate("Login");
+                Alert.alert(
+                    "Success", 
+                    "Registered successfully! Wait for admin approval.",
+                    [{ text: "OK", onPress: () => navigation.navigate("Login") }]
+                );
             } else {
-                alert(data.message || "Registration failed");
+                Alert.alert("Registration Failed", data.message || "Something went wrong");
             }
         } catch (error) {
-            console.log("REGISTER ERROR:", error);
-            alert("Server not reachable ❌");
+            console.log("REGISTER ERROR:", error.message);
+            
+            if (error.message.includes("HTML instead of JSON") || 
+                error.message.includes("invalid response format")) {
+                Alert.alert(
+                    "Server Error",
+                    "The API endpoint may not exist or the server is not configured correctly."
+                );
+            } else if (error.message.includes("Network request failed") || 
+                       error.message.includes("Failed to fetch")) {
+                Alert.alert(
+                    "Connection Error",
+                    "Could not connect to server. Please check your internet connection."
+                );
+            } else {
+                Alert.alert("Error", error.message);
+            }
         } finally {
             setLoading(false);
         }
@@ -156,13 +197,11 @@ export default function Register() {
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
-                    {/* Header */}
                     <View style={styles.headerSection}>
                         <Text style={styles.headerTitle}>Create Account</Text>
                         <Text style={styles.headerSubtitle}>Fill in your details to register</Text>
                     </View>
 
-                    {/* Registration Form */}
                     <View style={styles.card}>
                         {renderInput(
                             "Registration Number",
@@ -218,7 +257,6 @@ export default function Register() {
                             { field: "phone", keyboardType: "numeric", maxLength: 10, autoCapitalize: "none" }
                         )}
 
-                        {/* Gender Picker */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Gender</Text>
                             <View style={[styles.inputContainer, errors.gender && styles.inputContainerError]}>
@@ -257,7 +295,6 @@ export default function Register() {
                             { field: "confirmPassword", secureTextEntry: true, autoCapitalize: "none" }
                         )}
 
-                        {/* Register Button */}
                         <TouchableOpacity
                             style={[styles.button, loading && styles.buttonDisabled]}
                             onPress={handleRegister}
@@ -272,7 +309,6 @@ export default function Register() {
                             )}
                         </TouchableOpacity>
 
-                        {/* Sign In Prompt */}
                         <View style={styles.signInPrompt}>
                             <Text style={styles.signInText}>
                                 Already have an account?{" "}
@@ -286,7 +322,6 @@ export default function Register() {
                         </View>
                     </View>
 
-                    {/* Footer */}
                     <View style={styles.footerContainer}>
                         <Text style={styles.footerText}>© 2026 @TechVortex</Text>
                     </View>
@@ -310,8 +345,6 @@ const styles = StyleSheet.create({
         paddingBottom: 30,
         alignItems: "center",
     },
-
-    // Header
     headerSection: {
         width: "100%",
         marginBottom: 20,
@@ -329,8 +362,6 @@ const styles = StyleSheet.create({
         color: COLORS.onSurfaceVariant,
         fontWeight: "500",
     },
-
-    // Card
     card: {
         width: "100%",
         backgroundColor: COLORS.surfaceContainerLowest,
@@ -342,8 +373,6 @@ const styles = StyleSheet.create({
         shadowRadius: 20,
         elevation: 6,
     },
-
-    // Inputs
     inputGroup: {
         marginBottom: 16,
     },
@@ -385,8 +414,6 @@ const styles = StyleSheet.create({
         marginLeft: 4,
         fontWeight: "600",
     },
-
-    // Button
     button: {
         flexDirection: "row",
         alignItems: "center",
@@ -413,8 +440,6 @@ const styles = StyleSheet.create({
         textTransform: "uppercase",
         fontFamily: FONTS.label,
     },
-
-    // Sign In
     signInPrompt: {
         marginTop: 16,
         alignItems: "center",
@@ -427,8 +452,6 @@ const styles = StyleSheet.create({
         color: COLORS.primary,
         fontWeight: "700",
     },
-
-    // Footer
     footerContainer: {
         width: "100%",
         paddingVertical: 20,

@@ -6,41 +6,71 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Alert,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { EXPO_PUBLIC_API_URL } from "@env";
+import { authGet, authPut } from "../../utils/api";
 
 import Navbar from "../components/Navbar";
 import FooterAdmin from "../components/FooterAdmin";
 
 export default function AdminRequests() {
   const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // ✅ Fetch requests
+  // ✅ Fetch requests using authGet
   useEffect(() => {
-    fetch(`${EXPO_PUBLIC_API_URL}/admin/requests`)
-      .then((res) => res.json())
-      .then((data) => setRequests(data))
-      .catch((err) => console.log(err));
+    const fetchRequests = async () => {
+      try {
+        const data = await authGet("/admin/requests");
+        
+        // ✅ Safely check if it's a success and an array
+        if (data.success && Array.isArray(data.requests)) {
+          setRequests(data.requests);
+        } else {
+          Alert.alert("Error", data.message || "Failed to load requests");
+        }
+      } catch (err) {
+        console.log(err);
+        Alert.alert("Error", "Network error. Please login again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRequests();
   }, []);
 
-  // ✅ Approve
+  // ✅ Approve using authPut
   const handleApprove = async (id) => {
-    await fetch(`${EXPO_PUBLIC_API_URL}/admin/approve/${id}`, {
-      method: "PUT",
-    });
-
-    // remove from UI after approve
-    setRequests((prev) => prev.filter((item) => item._id !== id));
+    try {
+      const data = await authPut(`/admin/approve/${id}`);
+      
+      if (data.success) {
+        // remove from UI after approve
+        setRequests((prev) => prev.filter((item) => item._id !== id));
+      } else {
+        Alert.alert("Error", data.message || "Failed to approve");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Network error");
+    }
   };
 
-  // ✅ Reject
+  // ✅ Reject using authPut
   const handleReject = async (id) => {
-    await fetch(`${EXPO_PUBLIC_API_URL}/admin/reject/${id}`, {
-      method: "PUT",
-    });
-
-    setRequests((prev) => prev.filter((item) => item._id !== id));
+    try {
+      const data = await authPut(`/admin/reject/${id}`);
+      
+      if (data.success) {
+        // remove from UI after reject
+        setRequests((prev) => prev.filter((item) => item._id !== id));
+      } else {
+        Alert.alert("Error", data.message || "Failed to reject");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Network error");
+    }
   };
 
   return (
@@ -55,11 +85,16 @@ export default function AdminRequests() {
           Approve or reject student gate pass requests
         </Text>
 
-        {/* ✅ REAL DATA */}
-        {requests.length === 0 ? (
-          <Text style={{ textAlign: "center", marginTop: 20 }}>
-            No pending requests
+        {/* ✅ REAL DATA with Loading Check */}
+        {loading ? (
+          <Text style={{ textAlign: "center", marginTop: 20, color: "#777" }}>
+            Loading requests...
           </Text>
+        ) : requests.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="task-alt" size={50} color="#c5cae9" />
+            <Text style={styles.emptyText}>No pending requests</Text>
+          </View>
         ) : (
           requests.map((item) => (
             <View key={item._id} style={styles.card}>
@@ -118,6 +153,16 @@ const styles = StyleSheet.create({
   subheading: {
     color: "#5c6bc0",
     marginBottom: 20,
+  },
+  emptyContainer: {
+    alignItems: "center",
+    marginTop: 40,
+    gap: 10,
+  },
+  emptyText: {
+    fontSize: 15,
+    color: "#90a4ae",
+    fontWeight: "500",
   },
   card: {
     backgroundColor: "#fff",

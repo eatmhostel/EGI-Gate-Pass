@@ -9,6 +9,7 @@ const studentRoutes = require("./routes/studentRoutes")
 const securityRoutes = require("./routes/securityRoutes");
 const gatePassRoutes = require("./routes/gatePassRoutes")
 const securityScanRoutes = require("./routes/securityScanRoutes");
+const manualEntryRoutes = require("./routes/manualEntryRoutes");
 
 // DB connect
 connectDB();
@@ -22,6 +23,7 @@ app.use("/api/student",studentRoutes);
 app.use("/api/security", securityRoutes);
 app.use("/api/gatepass", gatePassRoutes);
 app.use("/api/security-scans", securityScanRoutes);
+app.use("/api/manual-entries", manualEntryRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Running...");

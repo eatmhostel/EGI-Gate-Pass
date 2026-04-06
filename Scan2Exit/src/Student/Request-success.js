@@ -14,7 +14,7 @@ import QRCode from "react-native-qrcode-svg";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { EXPO_PUBLIC_API_URL } from "@env";
 import { useRoute } from "@react-navigation/native";
-
+import AsyncStorage from "@react-native-async-storage/async-storage";
 function formatDateTime(dateStr) {
     if (!dateStr) return "—";
     const d = new Date(dateStr);
@@ -134,43 +134,55 @@ export default function RequestSuccess() {
 
     const route = useRoute();
     const { requestId } = route.params;
-
-    // ✅ Fetch data
+    // Replace the fetchData function with this fixed version:
     const fetchData = useCallback(async () => {
         try {
-            const res = await fetch(
-                `${EXPO_PUBLIC_API_URL}/gatepass/${requestId}`
-            );
+            const apiUrl = `${EXPO_PUBLIC_API_URL}/gatepass/${requestId}`;
+            const token = await AsyncStorage.getItem("authToken");
 
-            if (!res.ok) return;
+            const res = await fetch(apiUrl, {
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                },
+            });
 
-            const data = await res.json();
+            // ✅ FIX: Read body ONLY ONCE
+            const responseText = await res.text();
 
-            if (data.success) {
-                const req = data.request;
-
-                // ✅ Detect transition to completed
-                if (
-                    prevStatusRef.current &&
-                    prevStatusRef.current !== "completed" &&
-                    req.status === "completed"
-                ) {
-                    setJustCompleted(true);
-                    // Animate blur in
-                    Animated.timing(blurAnim, {
-                        toValue: 10,
-                        duration: 600,
-                        useNativeDriver: true,
-                    }).start();
-                }
-
-                prevStatusRef.current = req.status;
-                setRequestData(req);
-                setStudent(req.student);
-                setPollingCount((c) => c + 1);
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                console.log("Non-JSON response:", responseText.substring(0, 100));
+                return;
             }
+
+            if (!res.ok || !data.success) {
+                console.log(`Fetch failed: ${res.status}`);
+                return;
+            }
+
+            const req = data.request;
+
+            if (
+                prevStatusRef.current &&
+                prevStatusRef.current !== "completed" &&
+                req.status === "completed"
+            ) {
+                setJustCompleted(true);
+                Animated.timing(blurAnim, {
+                    toValue: 10,
+                    duration: 600,
+                    useNativeDriver: true,
+                }).start();
+            }
+
+            prevStatusRef.current = req.status;
+            setRequestData(req);
+            setStudent(req.student);
+            setPollingCount((c) => c + 1);
         } catch (err) {
-            console.log("POLL ERROR:", err);
+            console.log("POLL ERROR:", err.message);
         }
     }, [requestId]);
 
@@ -245,12 +257,12 @@ export default function RequestSuccess() {
     const displayState = isCompleted
         ? "completed"
         : isExpired
-        ? "expired"
-        : isPending
-        ? "pending"
-        : isRejected
-        ? "rejected"
-        : "active";
+            ? "expired"
+            : isPending
+                ? "pending"
+                : isRejected
+                    ? "rejected"
+                    : "active";
 
     const isQrDisabled = isCompleted || isExpired || isPending || isRejected;
     const shouldPoll = isActive;
@@ -321,12 +333,12 @@ export default function RequestSuccess() {
                                     {displayState === "completed"
                                         ? "PASS COMPLETED"
                                         : displayState === "expired"
-                                        ? "PASS EXPIRED"
-                                        : displayState === "pending"
-                                        ? "AWAITING APPROVAL"
-                                        : displayState === "rejected"
-                                        ? "PASS REJECTED"
-                                        : "PASS IS ACTIVE"}
+                                            ? "PASS EXPIRED"
+                                            : displayState === "pending"
+                                                ? "AWAITING APPROVAL"
+                                                : displayState === "rejected"
+                                                    ? "PASS REJECTED"
+                                                    : "PASS IS ACTIVE"}
                                 </Text>
 
                                 {/* ✅ Live indicator when polling */}
@@ -340,12 +352,12 @@ export default function RequestSuccess() {
                                     {displayState === "completed"
                                         ? "Entry and exit both recorded. This pass is now complete."
                                         : displayState === "expired"
-                                        ? "This pass has passed its validity window."
-                                        : displayState === "pending"
-                                        ? "Your request is being reviewed by the administration."
-                                        : displayState === "rejected"
-                                        ? "This gatepass request was not approved."
-                                        : "Present this QR code at the security terminal for scanning."}
+                                            ? "This pass has passed its validity window."
+                                            : displayState === "pending"
+                                                ? "Your request is being reviewed by the administration."
+                                                : displayState === "rejected"
+                                                    ? "This gatepass request was not approved."
+                                                    : "Present this QR code at the security terminal for scanning."}
                                 </Text>
                             </View>
 
@@ -386,24 +398,24 @@ export default function RequestSuccess() {
                                                 displayState === "completed"
                                                     ? "task-alt"
                                                     : displayState === "expired"
-                                                    ? "cancel"
-                                                    : displayState === "pending"
-                                                    ? "hourglass-top"
-                                                    : displayState === "rejected"
-                                                    ? "highlight-off"
-                                                    : "check-circle"
+                                                        ? "cancel"
+                                                        : displayState === "pending"
+                                                            ? "hourglass-top"
+                                                            : displayState === "rejected"
+                                                                ? "highlight-off"
+                                                                : "check-circle"
                                             }
                                             size={14}
                                             color={
                                                 displayState === "completed"
                                                     ? "#6366f1"
                                                     : displayState === "expired"
-                                                    ? "#64748b"
-                                                    : displayState === "pending"
-                                                    ? "#ca8a04"
-                                                    : displayState === "rejected"
-                                                    ? "#dc2626"
-                                                    : "#16a34a"
+                                                        ? "#64748b"
+                                                        : displayState === "pending"
+                                                            ? "#ca8a04"
+                                                            : displayState === "rejected"
+                                                                ? "#dc2626"
+                                                                : "#16a34a"
                                             }
                                         />
                                         <Text
@@ -418,12 +430,12 @@ export default function RequestSuccess() {
                                             {displayState === "completed"
                                                 ? "Completed"
                                                 : displayState === "expired"
-                                                ? "Expired"
-                                                : displayState === "pending"
-                                                ? "Pending"
-                                                : displayState === "rejected"
-                                                ? "Rejected"
-                                                : "Active"}
+                                                    ? "Expired"
+                                                    : displayState === "pending"
+                                                        ? "Pending"
+                                                        : displayState === "rejected"
+                                                            ? "Rejected"
+                                                            : "Active"}
                                         </Text>
                                     </View>
                                 </View>
@@ -518,12 +530,12 @@ export default function RequestSuccess() {
                                         {isCompleted
                                             ? "Pass has been fully used"
                                             : isExpired
-                                            ? "This pass is no longer valid"
-                                            : isPending
-                                            ? "QR will activate after approval"
-                                            : isRejected
-                                            ? "QR not generated"
-                                            : "Scan at security gate"}
+                                                ? "This pass is no longer valid"
+                                                : isPending
+                                                    ? "QR will activate after approval"
+                                                    : isRejected
+                                                        ? "QR not generated"
+                                                        : "Scan at security gate"}
                                     </Text>
                                 </View>
 
@@ -560,9 +572,9 @@ export default function RequestSuccess() {
                                                     style={[
                                                         styles.scanTrackerLineFill,
                                                         scannedOut &&
-                                                            styles.scanTrackerLineFillHalf,
+                                                        styles.scanTrackerLineFillHalf,
                                                         scannedIn &&
-                                                            styles.scanTrackerLineFillFull,
+                                                        styles.scanTrackerLineFillFull,
                                                     ]}
                                                 />
                                             </View>
@@ -585,8 +597,8 @@ export default function RequestSuccess() {
                                                 {scannedIn
                                                     ? "Student entered campus"
                                                     : scannedOut
-                                                    ? "Waiting for return"
-                                                    : "—"}
+                                                        ? "Waiting for return"
+                                                        : "—"}
                                             </Text>
                                         </View>
                                     </View>

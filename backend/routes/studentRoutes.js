@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
+const studentController = require("../controllers/studentController");
+const studentAuth = require("../middleware/studentAuth");
 
-const {
-  registerStudent,
-  loginStudent,
-} = require("../controllers/studentController");
+// ✅ Public Routes
+router.post("/register", studentController.registerStudent);
+router.post("/login", studentController.loginStudent);
 
-router.post("/register", registerStudent);
-router.post("/login", loginStudent);
+// ✅ Protected Routes (Require Auth)
+router.get("/verify", studentAuth, studentController.verifyStudent);
 
 module.exports = router;

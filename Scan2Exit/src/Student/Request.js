@@ -1,11 +1,11 @@
-import { React, useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     View,
     Text,
     ScrollView,
     StyleSheet,
-    TextInput,
     TouchableOpacity,
+    Alert,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -13,10 +13,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import Navbar from "../components/Navbar";
 import Footer from "../components/FooterStudent";
-import { useRoute } from "@react-navigation/native";
 import { EXPO_PUBLIC_API_URL } from "@env";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useEffect } from "react";
+
 const COLORS = {
     primary: "#0040a1",
     primaryContainer: "#0056d2",
@@ -43,70 +42,124 @@ export default function Request() {
     const [returnDate, setReturnDate] = useState(new Date());
     const [showReturnDate, setShowReturnDate] = useState(false);
     const [studentId, setStudentId] = useState("");
+    const [loading, setLoading] = useState(false);
+
     useEffect(() => {
         const getStudentId = async () => {
             try {
                 const id = await AsyncStorage.getItem("studentId");
-                setStudentId(id);
                 if (!id) {
                     console.log("No studentId in storage");
                     return;
                 }
                 setStudentId(id);
             } catch (err) {
-                console.log(err);
+                console.log("AsyncStorage error:", err);
             }
         };
         getStudentId();
     }, []);
+
     const handleSubmit = async () => {
-    if (!studentId) {
-        console.log("Student ID not found");
-        return;
-    }
-
-    try {
-        const res = await fetch(`${EXPO_PUBLIC_API_URL}/gatepass/request`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                studentId,
-                destination,
-                outTime: outTime.toISOString(),       
-                returnTime: returnTime.toISOString(), 
-                returnDate: returnDate.toISOString()  
-            })
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-            navigation.replace("RequestSuccess", {
-                requestId: data.requestId,
-                studentId: studentId,
-            });
-        } else {
-            console.log(data.message);
+        if (!studentId) {
+            Alert.alert("Error", "Student ID not found. Please login again.");
+            return;
         }
 
-    } catch (err) {
-        console.log(err);
-    }
-};
+        if (!destination) {
+            Alert.alert("Error", "Please select a destination");
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            // ✅ FIX: Use correct route - /create not /request
+            const apiUrl = `${EXPO_PUBLIC_API_URL}/gatepass/create`;
+            console.log("API URL:", apiUrl);
+
+            // ✅ Get token for authenticated request
+            const token = await AsyncStorage.getItem("authToken");
+
+            const res = await fetch(apiUrl, {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,  // ✅ Add auth header
+                },
+                body: JSON.stringify({
+                    studentId,
+                    destination,
+                    outTime: outTime.toISOString(),
+                    returnTime: returnTime.toISOString(),
+                    returnDate: returnDate.toISOString()
+                })
+            });
+
+            // ✅ FIX: Read body ONLY ONCE as text first
+            const responseText = await res.text();
+            
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                console.log("Raw response:", responseText.substring(0, 200));
+                throw new Error(`Invalid response from server (Status: ${res.status})`);
+            }
+
+            // Now check status and data
+            if (!res.ok) {
+                throw new Error(data.message || `Server error: ${res.status}`);
+            }
+
+            if (data.success) {
+                Alert.alert(
+                    data.status === "pending" ? "Submitted for Approval" : "Pass Created",
+                    data.status === "pending" 
+                        ? "Your home pass request has been submitted. Wait for admin approval."
+                        : "Your gate pass has been created successfully!",
+                    [
+                        {
+                            text: "OK",
+                            onPress: () => navigation.replace("RequestSuccess", {
+                                requestId: data.requestId,
+                                studentId: studentId,
+                            })
+                        }
+                    ]
+                );
+            } else {
+                Alert.alert("Request Failed", data.message || "Something went wrong");
+            }
+
+        } catch (err) {
+            console.log("Submit error:", err.message);
+            
+            if (err.message.includes("Failed to fetch") || 
+                err.message.includes("Network request failed")) {
+                Alert.alert(
+                    "Connection Error", 
+                    "Could not connect to the server. Check your internet connection."
+                );
+            } else {
+                Alert.alert("Error", err.message);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <View style={styles.container}>
             <Navbar />
 
             <ScrollView contentContainerStyle={styles.scroll}>
-                {/* Heading */}
                 <Text style={styles.title}>Request Pass</Text>
                 <Text style={styles.subtitle}>
                     Specify your journey details for swift institutional approval.
                 </Text>
 
-                {/* Form Card */}
                 <View style={styles.card}>
-
                     {/* Destination */}
                     <Text style={styles.label}>DESTINATION</Text>
                     <View style={styles.inputBox}>
@@ -203,18 +256,17 @@ export default function Request() {
 
                     {/* Submit */}
                     <TouchableOpacity
-                        style={styles.button}
+                        style={[styles.button, loading && styles.buttonDisabled]}
                         onPress={handleSubmit}
+                        disabled={loading}
                     >
                         <MaterialIcons name="send" size={20} color="#fff" />
                         <Text style={styles.buttonText}>
-                            Submit Request
+                            {loading ? "Submitting..." : "Submit Request"}
                         </Text>
                     </TouchableOpacity>
-
                 </View>
 
-                {/* Footer text inside ScrollView */}
                 <View style={styles.footerContainer}>
                     <Text style={styles.footerText}>© 2026 @TechVortex</Text>
                 </View>
@@ -243,14 +295,12 @@ const styles = StyleSheet.create({
         color: "#666",
         marginBottom: 20,
     },
-
     card: {
         backgroundColor: "#fff",
         padding: 16,
         borderRadius: 12,
         marginBottom: 20,
     },
-
     label: {
         fontSize: 10,
         fontWeight: "bold",
@@ -258,7 +308,6 @@ const styles = StyleSheet.create({
         marginBottom: 6,
         marginTop: 10,
     },
-
     inputBox: {
         flexDirection: "row",
         alignItems: "center",
@@ -266,23 +315,11 @@ const styles = StyleSheet.create({
         padding: 12,
         borderRadius: 10,
     },
-    input: {
-        marginLeft: 10,
-        flex: 1,
-    },
     inputText: {
         marginLeft: 10,
         color: "#000",
         fontSize: 16,
     },
-    row: {
-        flexDirection: "row",
-        gap: 10,
-    },
-    flex1: {
-        flex: 1,
-    },
-
     button: {
         marginTop: 20,
         backgroundColor: "#0040a1",
@@ -292,6 +329,9 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         gap: 8,
+    },
+    buttonDisabled: {
+        opacity: 0.6,
     },
     buttonText: {
         color: "#fff",
@@ -307,6 +347,6 @@ const styles = StyleSheet.create({
     footerText: {
         fontSize: 12,
         color: '#888',
-        textAlign: 'center', // ensure text is centered
+        textAlign: 'center',
     },
 });

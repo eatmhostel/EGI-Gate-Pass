@@ -37,4 +37,7 @@ const gatePassSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+// ✅ Auto-delete documents 72 hours (259200 seconds) after creation
+gatePassSchema.index({ createdAt: 1 }, { expireAfterSeconds: 259200 });
+
 module.exports = mongoose.model("GatePassRequest", gatePassSchema);
