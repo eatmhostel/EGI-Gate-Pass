@@ -7,33 +7,44 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aktechbbsr.Scan2Exit",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
+
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.aktechbbsr.Scan2Exit"
     },
+
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/icon.png"
     },
+
     "plugins": [
       "@react-native-community/datetimepicker"
     ],
+
     "extra": {
       "eas": {
-        "projectId": "4af7797d-4ddf-413e-9a5d-bf47431c5f84"
+        "projectId": "b3c142e8-e8e8-492f-aa97-99f07d840323"
       }
     },
-    "owner": "aktechbbsr"
+
+    "owner": "eatmhostel"
   }
 }
