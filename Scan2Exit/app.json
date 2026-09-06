@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Scan2Exit",
-    "slug": "Scan2Exit",
+    "slug": "scan2exit",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -44,6 +44,6 @@
         "projectId": "c9cd9bc1-4f36-4f26-b1c1-3118c540a52e"
       }
     },
-    "owner": "eatmhostel"
+    "owner": "eatmhostelteam"
   }
 }
