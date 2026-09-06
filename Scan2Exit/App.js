@@ -1,8 +1,9 @@
-import React, { useContext } from "react";
-import { StyleSheet, View, StatusBar, Platform, ActivityIndicator, Text } from "react-native";
+import React, { useContext, useEffect, useState } from "react";
+import { StyleSheet, View, StatusBar, Platform, ActivityIndicator, Text, Alert } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { MaterialIcons } from "@expo/vector-icons";
+import * as Updates from "expo-updates"; // <-- IMPORT ADDED
 
 import { AuthProvider, AuthContext } from "./src/context/AuthContext";
 
@@ -38,7 +39,7 @@ import AdminProfile from "./src/Admin/AdminProfile";
 
 const Stack = createNativeStackNavigator();
 
-// ✅ NEW: Splash Screen while checking Async Storage
+// ✅ Splash Screen while checking Async Storage
 function SplashScreen() {
   return (
     <View style={styles.splashContainer}>
@@ -51,22 +52,78 @@ function SplashScreen() {
   );
 }
 
-// ✅ NEW: Inner Navigator that reads Auth Context
+// ✅ Update Screen while downloading new update
+function UpdatingScreen() {
+  return (
+    <View style={styles.splashContainer}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" translucent={false} />
+      <MaterialIcons name="system-update-alt" size={70} color="#0040a1" />
+      <Text style={styles.splashText}>Updating App...</Text>
+      <ActivityIndicator size="large" color="#0040a1" style={{ marginTop: 20 }} />
+      <Text style={styles.splashSubText}>Please wait a moment.</Text>
+    </View>
+  );
+}
+
+// ✅ Inner Navigator that reads Auth Context & Checks for Updates
 function AppNavigator() {
   const { user, isLoading } = useContext(AuthContext);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  // 1. Show Splash while reading AsyncStorage
+  // --- OTA UPDATE LOGIC ---
+  useEffect(() => {
+    async function checkForUpdates() {
+      // Only check for updates in a built app (not in Expo Go dev mode)
+      if (!__DEV__) {
+        try {
+          const update = await Updates.checkForUpdateAsync();
+          if (update.isAvailable) {
+            Alert.alert(
+              "Update Available",
+              "A new version of the app is available. Do you want to update now?",
+              [
+                { text: "Later", style: "cancel" },
+                { 
+                  text: "Update Now", 
+                  onPress: async () => {
+                    try {
+                      setIsUpdating(true); // Show updating screen
+                      await Updates.fetchUpdateAsync(); // Download the update
+                      await Updates.reloadAsync(); // Restart app with new code
+                    } catch (e) {
+                      setIsUpdating(false);
+                      Alert.alert("Update Failed", "Could not update the app right now.");
+                    }
+                  }
+                }
+              ]
+            );
+          }
+        } catch (e) {
+          console.log("Error checking for updates:", e);
+        }
+      }
+    }
+    checkForUpdates();
+  }, []);
+
+  // 1. If updating, show the updating screen
+  if (isUpdating) {
+    return <UpdatingScreen />;
+  }
+
+  // 2. Show Splash while reading AsyncStorage
   if (isLoading) {
     return <SplashScreen />;
   }
 
-  // 2. Decide Initial Route based on saved role
+  // 3. Decide Initial Route based on saved role
   let initialRoute = "Home";
   if (user?.role === "admin") initialRoute = "AdminDashboard";
   else if (user?.role === "student") initialRoute = "StudentDashboard";
   else if (user?.role === "security") initialRoute = "SecurityDashboard";
 
-  // 3. Render Navigation
+  // 4. Render Navigation
   return (
     <View style={styles.container}>
       <StatusBar
@@ -146,7 +203,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#0040a1",
     marginTop: 15,
-    fontFamily: "Poppins_600SemiBold",
   },
   splashSubText: {
     fontSize: 12,

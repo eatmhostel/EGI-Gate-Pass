@@ -2,18 +2,16 @@
   "expo": {
     "name": "Scan2Exit",
     "slug": "Scan2Exit",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-
     "splash": {
       "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.aktechbbsr.Scan2Exit",
@@ -21,7 +19,6 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
-
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
@@ -30,21 +27,23 @@
       "edgeToEdgeEnabled": true,
       "package": "com.aktechbbsr.Scan2Exit"
     },
-
     "web": {
       "favicon": "./assets/icon.png"
     },
-
     "plugins": [
       "@react-native-community/datetimepicker"
     ],
-
+    "updates": {
+      "url": "https://u.expo.dev/c9cd9bc1-4f36-4f26-b1c1-3118c540a52e"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
     "extra": {
       "eas": {
-        "projectId": "b3c142e8-e8e8-492f-aa97-99f07d840323"
+        "projectId": "c9cd9bc1-4f36-4f26-b1c1-3118c540a52e"
       }
     },
-
     "owner": "eatmhostel"
   }
 }
