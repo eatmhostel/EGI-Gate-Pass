@@ -206,11 +206,14 @@ const Login = () => {
                     <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
                       {rememberMe && <MaterialIcons name="check" size={16} color={COLORS.onSecondary} />}
                     </View>
-                    <Text style={styles.checkboxLabel}>Remember me</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity hitSlop={10}>
-                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-                  </TouchableOpacity>
+                  
+                  {/* ✅ FORGOT PASSWORD ONLY FOR STUDENT */}
+                  {portal === 'STUDENT' && (
+                    <TouchableOpacity hitSlop={10}>
+                      <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 <TouchableOpacity
