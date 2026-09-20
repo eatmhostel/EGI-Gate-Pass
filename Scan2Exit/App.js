@@ -32,6 +32,7 @@ import AdminDashboard from "./src/Admin/AdminDashboard";
 import ApproveLeave from "./src/Admin/ApproveLeave";
 import AdminSecurityList from "./src/Admin/AdminSecurityList";
 import AdminStudents from "./src/Admin/AdminStudents";
+import StudentDetails from "./src/Admin/StudentDetails";
 import AdminRequests from "./src/Admin/AdminRequests";
 import AddSecurity from "./src/Admin/AddSecurity";
 import AdminHistory from "./src/Admin/AdminHistory";
@@ -167,6 +168,7 @@ function AppNavigator() {
           <Stack.Screen name="AddSecurity" component={AddSecurity} />
           <Stack.Screen name="AdminSecurityList" component={AdminSecurityList} />
           <Stack.Screen name="AdminStudents" component={AdminStudents} />
+          <Stack.Screen name="StudentDetails" component={StudentDetails}/>
           <Stack.Screen name="AdminRequests" component={AdminRequests} />
           <Stack.Screen name="AdminHistory" component={AdminHistory} />
           <Stack.Screen name="AdminProfile" component={AdminProfile} />

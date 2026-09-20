@@ -14,6 +14,10 @@ router.put("/reject/:id", adminAuth, adminController.rejectStudent);
 router.get("/total-students", adminAuth, adminController.getTotalStudents);
 router.get("/total-security", adminAuth, adminController.getTotalSecurity);
 router.get("/all-students", adminAuth, adminController.getAllStudents);
+
+// ✅ FIXED: use adminAuth (not verifyAdminToken) + use adminController.getStudentById
+router.get("/student/:id", adminAuth, adminController.getStudentById);
+
 router.delete("/delete-student/:id", adminAuth, adminController.deleteStudent);
 router.get("/all-security", adminAuth, adminController.getAllSecurity);
 router.delete("/delete-security/:id", adminAuth, adminController.deleteSecurity);

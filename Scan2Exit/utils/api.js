@@ -1,15 +1,24 @@
 import { EXPO_PUBLIC_API_URL } from "@env";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-// ✅ Use namespace import (*) to get cacheDirectory and downloadAsync
 import * as FileSystem from "expo-file-system/legacy";
 
-// ✅ Helper: Safe JSON parse from response
+// ✅ Helper: Safe JSON parse from response — NOW with error logging
 const safeParseResponse = async (response) => {
     const text = await response.text();
+
+    // ✅ If response is NOT OK, log error details and throw
+    if (!response.ok) {
+        console.error(`❌ API Error ${response.status} for URL`);
+        console.error("Response body:", text.substring(0, 300));
+        throw new Error(`Request failed (Status: ${response.status})`);
+    }
+
+    // ✅ Try to parse JSON
     try {
         return JSON.parse(text);
     } catch (e) {
-        throw new Error(`Invalid JSON response (Status: ${response.status})`);
+        console.error("❌ Non-JSON Response:", text.substring(0, 300));
+        throw new Error(`Invalid server response (Status: ${response.status})`);
     }
 };
 
@@ -25,7 +34,9 @@ const getHeaders = async () => {
 // ✅ Authenticated GET request
 export const authGet = async (endpoint) => {
     const headers = await getHeaders();
-    const response = await fetch(`${EXPO_PUBLIC_API_URL}${endpoint}`, {
+    const url = `${EXPO_PUBLIC_API_URL}${endpoint}`;
+    console.log("📡 GET:", url);  // ← Debug: see full URL
+    const response = await fetch(url, {
         method: "GET",
         headers,
     });
@@ -35,7 +46,9 @@ export const authGet = async (endpoint) => {
 // ✅ Authenticated POST request
 export const authPost = async (endpoint, body) => {
     const headers = await getHeaders();
-    const response = await fetch(`${EXPO_PUBLIC_API_URL}${endpoint}`, {
+    const url = `${EXPO_PUBLIC_API_URL}${endpoint}`;
+    console.log("📡 POST:", url);
+    const response = await fetch(url, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
@@ -46,7 +59,9 @@ export const authPost = async (endpoint, body) => {
 // ✅ Authenticated PUT request
 export const authPut = async (endpoint, body) => {
     const headers = await getHeaders();
-    const response = await fetch(`${EXPO_PUBLIC_API_URL}${endpoint}`, {
+    const url = `${EXPO_PUBLIC_API_URL}${endpoint}`;
+    console.log("📡 PUT:", url);
+    const response = await fetch(url, {
         method: "PUT",
         headers,
         body: JSON.stringify(body),
@@ -57,7 +72,9 @@ export const authPut = async (endpoint, body) => {
 // ✅ Authenticated DELETE request
 export const authDelete = async (endpoint) => {
     const headers = await getHeaders();
-    const response = await fetch(`${EXPO_PUBLIC_API_URL}${endpoint}`, {
+    const url = `${EXPO_PUBLIC_API_URL}${endpoint}`;
+    console.log("📡 DELETE:", url);
+    const response = await fetch(url, {
         method: "DELETE",
         headers,
     });
@@ -66,7 +83,9 @@ export const authDelete = async (endpoint) => {
 
 // ✅ Public GET request (no auth)
 export const publicGet = async (endpoint) => {
-    const response = await fetch(`${EXPO_PUBLIC_API_URL}${endpoint}`, {
+    const url = `${EXPO_PUBLIC_API_URL}${endpoint}`;
+    console.log("📡 GET (public):", url);
+    const response = await fetch(url, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
     });
@@ -75,7 +94,9 @@ export const publicGet = async (endpoint) => {
 
 // ✅ Public POST request (no auth)
 export const publicPost = async (endpoint, body) => {
-    const response = await fetch(`${EXPO_PUBLIC_API_URL}${endpoint}`, {
+    const url = `${EXPO_PUBLIC_API_URL}${endpoint}`;
+    console.log("📡 POST (public):", url);
+    const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -83,7 +104,7 @@ export const publicPost = async (endpoint, body) => {
     return await safeParseResponse(response);
 };
 
-// ✅✅✅ Download PDF with Auth 
+// ✅✅✅ Download PDF with Auth
 export const authDownloadPdf = async (endpoint, filename) => {
     const token = await AsyncStorage.getItem("authToken");
     const url = `${EXPO_PUBLIC_API_URL}${endpoint}`;
@@ -95,7 +116,6 @@ export const authDownloadPdf = async (endpoint, filename) => {
         },
     });
 
-    // If server returned error, delete the junk file
     if (downloadResult.status !== 200) {
         try { await FileSystem.deleteAsync(fileUri); } catch (e) {}
         throw new Error(`Download failed (Status: ${downloadResult.status})`);

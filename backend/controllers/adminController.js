@@ -95,6 +95,28 @@ exports.getAllStudents = async (req, res) => {
   }
 };
 
+// ✅ GET SINGLE STUDENT BY ID (Full Details)
+exports.getStudentById = async (req, res) => {
+  console.log("📡 getStudentById HIT! ID:", req.params.id);  // ← ADD THIS LINE
+  try {
+    const student = await Student.findById(req.params.id).select("-password");
+    if (!student) return res.json({ success: false, message: "Student not found" });
+
+    const gatePasses = await GatePass.find({ student: req.params.id })
+      .sort({ createdAt: -1 })
+      .limit(20);
+
+    const scans = await SecurityScan.find({ student: req.params.id })
+      .sort({ createdAt: -1 })
+      .limit(20);
+
+    res.json({ success: true, student, gatePasses, scans });
+  } catch (err) {
+    console.error("❌ getStudentById Error:", err.message);
+    res.json({ success: false, message: err.message });
+  }
+};
+
 // ✅ DELETE STUDENT
 exports.deleteStudent = async (req, res) => {
   try {
