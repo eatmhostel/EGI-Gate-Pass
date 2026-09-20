@@ -42,7 +42,6 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const { saveSession } = useContext(AuthContext);
 
@@ -201,20 +200,13 @@ const Login = () => {
                   </View>
                 </View>
 
-                <View style={styles.formOptions}>
-                  <TouchableOpacity style={styles.checkboxContainer} onPress={() => setRememberMe(!rememberMe)} hitSlop={10}>
-                    <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                      {rememberMe && <MaterialIcons name="check" size={16} color={COLORS.onSecondary} />}
-                    </View>
-                  </TouchableOpacity>
-                  
-                  {/* ✅ FORGOT PASSWORD ONLY FOR STUDENT */}
-                  {portal === 'STUDENT' && (
+                {portal === 'STUDENT' && (
+                  <View style={styles.formOptions}>
                     <TouchableOpacity hitSlop={10}>
                       <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                     </TouchableOpacity>
-                  )}
-                </View>
+                  </View>
+                )}
 
                 <TouchableOpacity
                   style={[styles.signInButton, loading && styles.signInButtonDisabled]}
@@ -272,11 +264,7 @@ const styles = StyleSheet.create({
   inputIcon: { paddingLeft: 16 },
   textInput: { flex: 1, padding: 16, color: COLORS.onSurface, fontSize: 15, fontFamily: FONTS.body },
   visibilityIcon: { paddingRight: 16 },
-  formOptions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 16 },
-  checkboxContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: COLORS.outlineVariant, justifyContent: 'center', alignItems: 'center' },
-  checkboxChecked: { backgroundColor: COLORS.secondary, borderColor: COLORS.secondary },
-  checkboxLabel: { fontSize: 13, fontWeight: '500', color: COLORS.onSurfaceVariant },
+  formOptions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginVertical: 16 },
   forgotPasswordText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
   signInButton: { width: '100%', paddingVertical: 18, backgroundColor: COLORS.primary, borderRadius: 9999, alignItems: 'center', marginTop: 8, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 10 },
   signInButtonDisabled: { opacity: 0.6 },
