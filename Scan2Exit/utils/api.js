@@ -1,4 +1,4 @@
-import { EXPO_PUBLIC_API_URL } from "@env";
+const EXPO_PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL;
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 
