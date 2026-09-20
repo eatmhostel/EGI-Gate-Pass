@@ -1,0 +1,37 @@
+name: EAS Production Update
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  update:
+    name: Send OTA Update to Production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for EXPO_TOKEN
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "You need to provide an EXPO_TOKEN secret in GitHub Settings"
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Push Update to Production
+        working-directory: ./Scan2Exit
+        run: |
+          eas update --branch production --message "Auto-deploy from GitHub: ${{ github.event.head_commit.message }}"
