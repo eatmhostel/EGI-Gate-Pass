@@ -12,12 +12,21 @@ const securityRoutes = require("./routes/securityRoutes");
 const gatePassRoutes = require("./routes/gatePassRoutes")
 const securityScanRoutes = require("./routes/securityScanRoutes");
 const manualEntryRoutes = require("./routes/manualEntryRoutes");
+const rateLimit = require('express-rate-limit');
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per window
+    message: "Too many requests from this IP, please try again later."
+});
 
 // DB connect
 connectDB();
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
+
+app.use('/api/', limiter); // Apply to all API routes
 
 // Routes
 app.use("/api/admin", adminRoutes);

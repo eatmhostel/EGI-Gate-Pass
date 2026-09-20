@@ -1,4 +1,4 @@
-const EXPO_PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL;
+const EXPO_PUBLIC_API_URL = "https://egi-gate-pass-bgig.onrender.com/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 
