@@ -31,7 +31,7 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Push Update to Production
+      - name: Push Update to Preview
         working-directory: ./Scan2Exit
         run: |
-          eas update --branch production --message "Auto-deploy from GitHub: ${{ github.event.head_commit.message }}"
+          eas update --branch preview --message "Auto-deploy from GitHub: ${{ github.event.head_commit.message }}"
