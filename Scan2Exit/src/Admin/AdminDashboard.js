@@ -93,7 +93,7 @@ export default function AdminDashboard() {
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
             >
-                <Text style={styles.heading}>Admin Dashboard</Text>
+                <Text style={styles.heading}>Dashboard</Text>
                 <Text style={styles.subheading}>
                     Real-time institutional control and access monitoring.
                 </Text>
