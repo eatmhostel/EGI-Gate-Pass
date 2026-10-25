@@ -34,6 +34,7 @@ import AdminSecurityList from "./src/Admin/AdminSecurityList";
 import AdminStudents from "./src/Admin/AdminStudents";
 import StudentDetails from "./src/Admin/StudentDetails";
 import AdminRequests from "./src/Admin/AdminRequests";
+import RequestDetails from "./src/Admin/RequestDetails";
 import AddSecurity from "./src/Admin/AddSecurity";
 import AdminHistory from "./src/Admin/AdminHistory";
 import AdminProfile from "./src/Admin/AdminProfile";
@@ -170,6 +171,7 @@ function AppNavigator() {
           <Stack.Screen name="AdminStudents" component={AdminStudents} />
           <Stack.Screen name="StudentDetails" component={StudentDetails}/>
           <Stack.Screen name="AdminRequests" component={AdminRequests} />
+          <Stack.Screen name="RequestDetails" component={RequestDetails}/>
           <Stack.Screen name="AdminHistory" component={AdminHistory} />
           <Stack.Screen name="AdminProfile" component={AdminProfile} />
         </Stack.Navigator>

@@ -4,6 +4,7 @@ const Security = require("../models/Security");
 const GatePass = require("../models/GatePassRequest");
 const SecurityScan = require("../models/SecurityScan");
 const jwt = require("jsonwebtoken");
+const { sendApprovalEmail, sendRejectionEmail } = require("../utils/mailer");
 
 // ✅ LOGIN WITH JWT TOKEN
 exports.adminLogin = (req, res) => {
@@ -12,17 +13,17 @@ exports.adminLogin = (req, res) => {
   if (email === process.env.ADMIN_ID && password === process.env.ADMIN_PASS) {
     // Generate JWT Token
     const token = jwt.sign(
-      { 
-        id: "admin_001", 
-        name: email, 
-        role: "admin" 
+      {
+        id: "admin_001",
+        name: email,
+        role: "admin"
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || "30d" }
     );
 
-    return res.json({ 
-      success: true, 
+    return res.json({
+      success: true,
       token,
       user: {
         name: email,
@@ -36,9 +37,9 @@ exports.adminLogin = (req, res) => {
 
 // ✅ VERIFY TOKEN (Keep session alive)
 exports.verifyAdmin = (req, res) => {
-  return res.json({ 
-    success: true, 
-    user: req.user 
+  return res.json({
+    success: true,
+    user: req.user
   });
 };
 
@@ -46,23 +47,68 @@ exports.verifyAdmin = (req, res) => {
 exports.getRequests = async (req, res) => {
   try {
     const students = await Student.find({ status: "pending" });
-    // ✅ Return standard object instead of raw array
     res.json({ success: true, requests: students });
   } catch (err) {
     res.json({ success: false, message: err.message });
   }
 };
 
-// ✅ APPROVE
+// ✅ APPROVE + SEND EMAIL
 exports.approveStudent = async (req, res) => {
-  await Student.findByIdAndUpdate(req.params.id, { status: "approved" });
-  res.json({ success: true, message: "Student approved" });
+  try {
+    const student = await Student.findByIdAndUpdate(
+      req.params.id,
+      { status: "approved" },
+      { new: true }
+    );
+
+    if (!student) {
+      return res.json({ success: false, message: "Student not found" });
+    }
+
+    // Send approval email (non-blocking — don't fail the request if email fails)
+    try {
+      await sendApprovalEmail(student);
+    } catch (emailErr) {
+      console.error("Approval email failed:", emailErr.message);
+      // You can still return success here since DB was updated
+    }
+
+    res.json({
+      success: true,
+      message: "Student approved & email sent successfully",
+    });
+  } catch (err) {
+    res.json({ success: false, message: err.message });
+  }
 };
 
-// ✅ REJECT
+// ✅ REJECT + SEND EMAIL
 exports.rejectStudent = async (req, res) => {
-  await Student.findByIdAndUpdate(req.params.id, { status: "rejected" });
-  res.json({ success: true, message: "Student rejected" });
+  try {
+    const student = await Student.findByIdAndUpdate(
+      req.params.id,
+      { status: "rejected" },
+      { new: true }
+    );
+
+    if (!student) {
+      return res.json({ success: false, message: "Student not found" });
+    }
+
+    try {
+      await sendRejectionEmail(student);
+    } catch (emailErr) {
+      console.error("Rejection email failed:", emailErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: "Student rejected & email sent successfully",
+    });
+  } catch (err) {
+    res.json({ success: false, message: err.message });
+  }
 };
 
 // ✅ TOTAL STUDENTS
@@ -155,9 +201,9 @@ exports.downloadData = async (req, res) => {
     const scans = await SecurityScan.find({
       createdAt: { $gte: twentyFourHoursAgo }
     })
-    .sort({ createdAt: 1 })
-    .populate("student", "fullName regNo course branch phone")
-    .populate("gatePass", "destination outTime returnTime");
+      .sort({ createdAt: 1 })
+      .populate("student", "fullName regNo course branch phone")
+      .populate("gatePass", "destination outTime returnTime");
 
     // Get guard details
     const uniqueGuardNames = [...new Set(scans.map(s => s.scannedBy).filter(Boolean))];
@@ -265,21 +311,21 @@ exports.downloadData = async (req, res) => {
     const fmtDT = (d) =>
       d
         ? new Date(d).toLocaleString("en-IN", {
-            timeZone: "Asia/Kolkata",
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })
+          timeZone: "Asia/Kolkata",
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
         : "—";
 
     // --- Draw blue header bar ---
     doc.rect(0, 0, doc.page.width, 65).fill("#0040a1");
     doc.fill("#ffffff").fontSize(20).font("Helvetica-Bold")
-       .text("GATE ACTIVITY REPORT", 0, 12, { align: "center" });
+      .text("GATE ACTIVITY REPORT", 0, 12, { align: "center" });
     doc.fontSize(10).font("Helvetica")
-       .text("Last 24 Hours  \u2022  Generated: " + new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }), 0, 40, { align: "center" });
+      .text("Last 24 Hours  \u2022  Generated: " + new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }), 0, 40, { align: "center" });
 
     doc.fill("#000000");
     let y = 80;
@@ -298,7 +344,7 @@ exports.downloadData = async (req, res) => {
     function drawPageHeader() {
       doc.rect(0, 0, doc.page.width, 22).fill("#0040a1");
       doc.fill("#ffffff").fontSize(7).font("Helvetica-Bold")
-         .text("GATE ACTIVITY REPORT \u2022 Last 24 Hours", 0, 7, { align: "center" });
+        .text("GATE ACTIVITY REPORT \u2022 Last 24 Hours", 0, 7, { align: "center" });
       doc.fill("#000000");
     }
 
@@ -319,7 +365,7 @@ exports.downloadData = async (req, res) => {
 
       // Section title
       doc.fill("#1a237e").fontSize(10).font("Helvetica-Bold")
-         .text(title, doc.page.margins.left, cy);
+        .text(title, doc.page.margins.left, cy);
       cy += 16;
 
       // Header background
@@ -335,7 +381,7 @@ exports.downloadData = async (req, res) => {
       // Rows
       if (rows.length === 0) {
         doc.fill("#999999").fontSize(9).font("Helvetica-Oblique")
-           .text("No records found", doc.page.margins.left, cy + 4, { width: pageW, align: "center" });
+          .text("No records found", doc.page.margins.left, cy + 4, { width: pageW, align: "center" });
         cy += 22;
       } else {
         rows.forEach((row, ri) => {
@@ -373,8 +419,8 @@ exports.downloadData = async (req, res) => {
 
           // Row bottom line
           doc.moveTo(doc.page.margins.left, cy + rowH)
-             .lineTo(doc.page.margins.left + pageW, cy + rowH)
-             .stroke("#e0e0e0");
+            .lineTo(doc.page.margins.left + pageW, cy + rowH)
+            .stroke("#e0e0e0");
           cy += rowH;
         });
       }
@@ -430,10 +476,10 @@ exports.downloadData = async (req, res) => {
 
     // --- Footer on last page ---
     doc.fill("#aaaaaa").fontSize(7).font("Helvetica")
-       .text("This is a system-generated report.", doc.page.margins.left, doc.page.height - 25, {
-         width: pageW,
-         align: "center"
-       });
+      .text("This is a system-generated report.", doc.page.margins.left, doc.page.height - 25, {
+        width: pageW,
+        align: "center"
+      });
 
     doc.end();
 
