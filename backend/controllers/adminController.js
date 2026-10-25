@@ -56,6 +56,9 @@ exports.getRequests = async (req, res) => {
 // ✅ APPROVE + SEND EMAIL
 exports.approveStudent = async (req, res) => {
   try {
+    console.log("========== APPROVE STUDENT ==========");
+    console.log("Student ID:", req.params.id);
+
     const student = await Student.findByIdAndUpdate(
       req.params.id,
       { status: "approved" },
@@ -63,22 +66,26 @@ exports.approveStudent = async (req, res) => {
     );
 
     if (!student) {
+      console.log("❌ Student not found");
       return res.json({ success: false, message: "Student not found" });
     }
 
-    // Send approval email (non-blocking — don't fail the request if email fails)
+    console.log("✅ Student:", student.fullName);
+    console.log("📧 Email:", student.email);
+    console.log("🔐 EMAIL_USER env:", process.env.EMAIL_USER ? "SET ✅" : "NOT SET ❌");
+    console.log("🔐 EMAIL_PASS env:", process.env.EMAIL_PASS ? "SET ✅" : "NOT SET ❌");
+
     try {
-      await sendApprovalEmail(student);
+      console.log("📤 Sending email...");
+      const info = await sendApprovalEmail(student);
+      console.log("✅ Email sent! ID:", info.messageId);
     } catch (emailErr) {
-      console.error("Approval email failed:", emailErr.message);
-      // You can still return success here since DB was updated
+      console.error("❌ Email FAILED:", emailErr.message);
     }
 
-    res.json({
-      success: true,
-      message: "Student approved & email sent successfully",
-    });
+    res.json({ success: true, message: "Student approved & email sent" });
   } catch (err) {
+    console.error("❌ approveStudent error:", err.message);
     res.json({ success: false, message: err.message });
   }
 };
