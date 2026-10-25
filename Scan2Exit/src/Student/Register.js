@@ -56,6 +56,8 @@ export default function Register() {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState({});
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const validate = () => {
         const newErrors = {};
@@ -101,7 +103,6 @@ export default function Register() {
                 }),
             });
 
-            // ✅ Check response status first
             if (!res.ok) {
                 let errorMsg = `Server error: ${res.status}`;
                 try {
@@ -114,7 +115,6 @@ export default function Register() {
                 throw new Error(errorMsg);
             }
 
-            // ✅ Safely parse JSON
             const contentType = res.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 throw new Error("Server returned invalid response format");
@@ -124,7 +124,7 @@ export default function Register() {
 
             if (data.success) {
                 Alert.alert(
-                    "Success", 
+                    "Success",
                     "Registered successfully! Wait for admin approval.",
                     [{ text: "OK", onPress: () => navigation.navigate("Login") }]
                 );
@@ -133,14 +133,14 @@ export default function Register() {
             }
         } catch (error) {
             console.log("REGISTER ERROR:", error.message);
-            
-            if (error.message.includes("HTML instead of JSON") || 
+
+            if (error.message.includes("HTML instead of JSON") ||
                 error.message.includes("invalid response format")) {
                 Alert.alert(
                     "Server Error",
                     "The API endpoint may not exist or the server is not configured correctly."
                 );
-            } else if (error.message.includes("Network request failed") || 
+            } else if (error.message.includes("Network request failed") ||
                        error.message.includes("Failed to fetch")) {
                 Alert.alert(
                     "Connection Error",
@@ -175,6 +175,34 @@ export default function Register() {
                     editable={!loading}
                     {...extraProps}
                 />
+                {extraProps.field === "password" && (
+                    <TouchableOpacity
+                        style={styles.eyeIcon}
+                        onPress={() => setShowPassword(!showPassword)}
+                        disabled={loading}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <MaterialIcons
+                            name={showPassword ? "visibility" : "visibility-off"}
+                            size={20}
+                            color={COLORS.outline}
+                        />
+                    </TouchableOpacity>
+                )}
+                {extraProps.field === "confirmPassword" && (
+                    <TouchableOpacity
+                        style={styles.eyeIcon}
+                        onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                        disabled={loading}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <MaterialIcons
+                            name={showConfirmPassword ? "visibility" : "visibility-off"}
+                            size={20}
+                            color={COLORS.outline}
+                        />
+                    </TouchableOpacity>
+                )}
             </View>
             {errors[extraProps.field] && (
                 <Text style={styles.errorText}>{errors[extraProps.field]}</Text>
@@ -283,7 +311,11 @@ export default function Register() {
                             "Min 6 characters",
                             password,
                             setPassword,
-                            { field: "password", secureTextEntry: true, autoCapitalize: "none" }
+                            {
+                                field: "password",
+                                secureTextEntry: !showPassword,
+                                autoCapitalize: "none",
+                            }
                         )}
 
                         {renderInput(
@@ -292,7 +324,11 @@ export default function Register() {
                             "Re-enter password",
                             confirmPassword,
                             setConfirmPassword,
-                            { field: "confirmPassword", secureTextEntry: true, autoCapitalize: "none" }
+                            {
+                                field: "confirmPassword",
+                                secureTextEntry: !showConfirmPassword,
+                                autoCapitalize: "none",
+                            }
                         )}
 
                         <TouchableOpacity
@@ -406,6 +442,11 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: COLORS.onSurface,
         fontFamily: FONTS.body,
+    },
+    eyeIcon: {
+        padding: 10,
+        justifyContent: "center",
+        alignItems: "center",
     },
     errorText: {
         fontSize: 11,
