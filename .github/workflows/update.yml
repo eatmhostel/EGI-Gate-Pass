@@ -31,4 +31,4 @@ jobs:
 
       - name: Push Update to Preview
         working-directory: ./Scan2Exit
-        run: eas update --branch preview --non-interactive --message "Auto-deploy from GitHub"
+        run: eas update --branch preview --environment preview --non-interactive --message "Auto-deploy from GitHub"
