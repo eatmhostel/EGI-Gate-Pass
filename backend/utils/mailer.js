@@ -7,22 +7,31 @@ const getTransporter = () => {
   if (!_transporter) {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       throw new Error(
-        `Email credentials missing in env. EMAIL_USER=${
+        `Email credentials missing. EMAIL_USER=${
           process.env.EMAIL_USER ? "SET" : "NOT SET"
         }, EMAIL_PASS=${process.env.EMAIL_PASS ? "SET" : "NOT SET"}`
       );
     }
 
     _transporter = nodemailer.createTransport({
-      service: "gmail",
+      // ✅ Use explicit SMTP host/port instead of "service: gmail"
+      host: "smtp.gmail.com",
+      port: 465,            // 465 = SSL (more reliable than 587 STARTTLS)
+      secure: true,         // true for port 465
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
-      // ✅ Explicit timeouts so failures don't hang forever
-      connectionTimeout: 10000, // 10s
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
+      // ✅ Disable pooling — force a fresh connection every send
+      pool: false,
+      // ✅ Longer timeouts
+      connectionTimeout: 30000,  // 30s
+      greetingTimeout: 30000,
+      socketTimeout: 60000,
+      // ✅ Don't allow self-signed certs to fail silently
+      tls: {
+        rejectUnauthorized: false,
+      },
     });
 
     console.log("✅ Email transporter initialized with:", process.env.EMAIL_USER);
