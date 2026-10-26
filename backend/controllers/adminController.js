@@ -62,7 +62,7 @@ exports.approveStudent = async (req, res) => {
     const student = await Student.findByIdAndUpdate(
       req.params.id,
       { status: "approved" },
-      { new: true }
+      { returnDocument: "after" }  // ✅ replaces deprecated { new: true }
     );
 
     if (!student) {
@@ -70,50 +70,80 @@ exports.approveStudent = async (req, res) => {
       return res.json({ success: false, message: "Student not found" });
     }
 
-    console.log("✅ Student:", student.fullName);
-    console.log("📧 Email:", student.email);
-    console.log("🔐 EMAIL_USER env:", process.env.EMAIL_USER ? "SET ✅" : "NOT SET ❌");
-    console.log("🔐 EMAIL_PASS env:", process.env.EMAIL_PASS ? "SET ✅" : "NOT SET ❌");
+    console.log("✅ Student:", student.fullName, "|", student.email);
 
+    let emailSent = false;
     try {
-      console.log("📤 Sending email...");
       const info = await sendApprovalEmail(student);
+      emailSent = true;
       console.log("✅ Email sent! ID:", info.messageId);
     } catch (emailErr) {
       console.error("❌ Email FAILED:", emailErr.message);
     }
 
-    res.json({ success: true, message: "Student approved & email sent" });
+    res.json({
+      success: true,
+      emailSent,
+      message: emailSent
+        ? "Student approved & email sent successfully"
+        : "Student approved, but email failed to send (check server logs)",
+    });
   } catch (err) {
     console.error("❌ approveStudent error:", err.message);
     res.json({ success: false, message: err.message });
   }
 };
 
-// ✅ REJECT + SEND EMAIL
+// ✅ REJECT + SEND EMAIL + DELETE FROM DB
 exports.rejectStudent = async (req, res) => {
   try {
-    const student = await Student.findByIdAndUpdate(
-      req.params.id,
-      { status: "rejected" },
-      { new: true }
-    );
+    console.log("========== REJECT STUDENT ==========");
+    console.log("Student ID:", req.params.id);
+
+    // 1) Fetch student FIRST (we need email before deleting)
+    const student = await Student.findById(req.params.id);
 
     if (!student) {
       return res.json({ success: false, message: "Student not found" });
     }
 
+    console.log("✅ Student:", student.fullName, "|", student.email);
+
+    // 2) Send rejection email (non-blocking — we still delete even if email fails)
+    let emailSent = false;
     try {
-      await sendRejectionEmail(student);
+      const info = await sendRejectionEmail(student);
+      emailSent = true;
+      console.log("✅ Email sent! ID:", info.messageId);
     } catch (emailErr) {
-      console.error("Rejection email failed:", emailErr.message);
+      console.error("❌ Email FAILED:", emailErr.message);
     }
 
+    // 3) Delete related records (optional but recommended for clean DB)
+    try {
+      const deletedPasses = await GatePass.deleteMany({ student: req.params.id });
+      const deletedScans = await SecurityScan.deleteMany({ student: req.params.id });
+      console.log(`🗑️  Deleted ${deletedPasses.deletedCount} gate passes & ${deletedScans.deletedCount} scans`);
+    } catch (cleanupErr) {
+      console.error("⚠️  Related records cleanup failed:", cleanupErr.message);
+      // Continue — still delete the student
+    }
+
+    // 4) Delete the student record itself
+    await Student.findByIdAndDelete(req.params.id);
+    console.log("🗑️  Student deleted from DB");
+
+    // 5) Respond to frontend
     res.json({
       success: true,
-      message: "Student rejected & email sent successfully",
+      emailSent,
+      deleted: true,
+      message: emailSent
+        ? "Student rejected, email sent & record deleted"
+        : "Student rejected & record deleted (email failed — check logs)",
     });
   } catch (err) {
+    console.error("❌ rejectStudent error:", err.message);
     res.json({ success: false, message: err.message });
   }
 };

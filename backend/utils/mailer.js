@@ -1,22 +1,45 @@
 const nodemailer = require("nodemailer");
 
-// ✅ Reusable transporter (created once)
-const transporter = nodemailer.createTransport({
-  service: "gmail", // or use host/port for SMTP
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // Use Gmail App Password, NOT your real password
-  },
-});
+// ✅ Lazy transporter — created on first use, NOT at module load
+let _transporter = null;
+
+const getTransporter = () => {
+  if (!_transporter) {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      throw new Error(
+        `Email credentials missing in env. EMAIL_USER=${
+          process.env.EMAIL_USER ? "SET" : "NOT SET"
+        }, EMAIL_PASS=${process.env.EMAIL_PASS ? "SET" : "NOT SET"}`
+      );
+    }
+
+    _transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      // ✅ Explicit timeouts so failures don't hang forever
+      connectionTimeout: 10000, // 10s
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+    });
+
+    console.log("✅ Email transporter initialized with:", process.env.EMAIL_USER);
+  }
+  return _transporter;
+};
 
 /**
  * Send an approval email to a student
  */
 const sendApprovalEmail = async (student) => {
+  if (!student?.email) throw new Error("Student email is missing");
+
   const mailOptions = {
     from: `"Campus Gate Pass System" <${process.env.EMAIL_USER}>`,
     to: student.email,
-    subject: "✅ Your Account Has Been Approved",
+    subject: "Your Account Has Been Approved",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
         <h2 style="color: #16a34a;">Account Approved!</h2>
@@ -37,17 +60,19 @@ const sendApprovalEmail = async (student) => {
     `,
   };
 
-  return transporter.sendMail(mailOptions);
+  return getTransporter().sendMail(mailOptions);
 };
 
 /**
  * Send a rejection email to a student
  */
 const sendRejectionEmail = async (student) => {
+  if (!student?.email) throw new Error("Student email is missing");
+
   const mailOptions = {
     from: `"Campus Gate Pass System" <${process.env.EMAIL_USER}>`,
     to: student.email,
-    subject: "❌ Your Registration Has Been Rejected",
+    subject: "Your Registration Has Been Rejected",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
         <h2 style="color: #dc2626;">Registration Rejected</h2>
@@ -66,7 +91,7 @@ const sendRejectionEmail = async (student) => {
     `,
   };
 
-  return transporter.sendMail(mailOptions);
+  return getTransporter().sendMail(mailOptions);
 };
 
 module.exports = {
