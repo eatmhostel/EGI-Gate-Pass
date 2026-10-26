@@ -1,42 +1,59 @@
-const nodemailer = require("nodemailer");
+// ✅ Direct Brevo HTTP API — no SDK, no version issues
+const fetch = require("node-fetch").default;
+const API_BASE = "https://api.brevo.com/v3";
 
-// ✅ Lazy transporter — created on first use, NOT at module load
-let _transporter = null;
+let _initialized = false;
 
-const getTransporter = () => {
-  if (!_transporter) {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      throw new Error(
-        `Email credentials missing. EMAIL_USER=${
-          process.env.EMAIL_USER ? "SET" : "NOT SET"
-        }, EMAIL_PASS=${process.env.EMAIL_PASS ? "SET" : "NOT SET"}`
-      );
+const initCheck = () => {
+  if (!_initialized) {
+    if (!process.env.BREVO_API_KEY) {
+      throw new Error("BREVO_API_KEY missing in env");
     }
-
-    _transporter = nodemailer.createTransport({
-      // ✅ Use explicit SMTP host/port instead of "service: gmail"
-      host: "smtp.gmail.com",
-      port: 465,            // 465 = SSL (more reliable than 587 STARTTLS)
-      secure: true,         // true for port 465
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      // ✅ Disable pooling — force a fresh connection every send
-      pool: false,
-      // ✅ Longer timeouts
-      connectionTimeout: 30000,  // 30s
-      greetingTimeout: 30000,
-      socketTimeout: 60000,
-      // ✅ Don't allow self-signed certs to fail silently
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
-
-    console.log("✅ Email transporter initialized with:", process.env.EMAIL_USER);
+    if (!process.env.BREVO_FROM_EMAIL) {
+      throw new Error("BREVO_FROM_EMAIL missing in env");
+    }
+    console.log("✅ Brevo email client initialized");
+    _initialized = true;
   }
-  return _transporter;
+};
+
+/**
+ * Internal: call Brevo's send email endpoint
+ */
+const sendBrevoEmail = async ({ to, toName, subject, htmlContent }) => {
+  initCheck();
+
+  const response = await fetch(`${API_BASE}/smtp/email`, {
+    method: "POST",
+    headers: {
+      "api-key": process.env.BREVO_API_KEY,
+      "Content-Type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: {
+        email: process.env.BREVO_FROM_EMAIL,
+        name: process.env.BREVO_FROM_NAME || "Campus Gate Pass System",
+      },
+      to: [{ email: to, name: toName }],
+      subject,
+      htmlContent,
+    }),
+  });
+
+  // Read the response body once
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errMsg =
+      data?.message || data?.error || `Brevo API error: HTTP ${response.status}`;
+    const error = new Error(errMsg);
+    error.response = data;
+    error.status = response.status;
+    throw error;
+  }
+
+  return { messageId: data?.messageId };
 };
 
 /**
@@ -45,11 +62,11 @@ const getTransporter = () => {
 const sendApprovalEmail = async (student) => {
   if (!student?.email) throw new Error("Student email is missing");
 
-  const mailOptions = {
-    from: `"Campus Gate Pass System" <${process.env.EMAIL_USER}>`,
+  return sendBrevoEmail({
     to: student.email,
+    toName: student.fullName,
     subject: "Your Account Has Been Approved",
-    html: `
+    htmlContent: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
         <h2 style="color: #16a34a;">Account Approved!</h2>
         <p>Dear <strong>${student.fullName}</strong>,</p>
@@ -67,9 +84,7 @@ const sendApprovalEmail = async (student) => {
         <p style="margin-top: 24px;">Regards,<br/><strong>Campus Gate Pass Admin Team</strong></p>
       </div>
     `,
-  };
-
-  return getTransporter().sendMail(mailOptions);
+  });
 };
 
 /**
@@ -78,11 +93,11 @@ const sendApprovalEmail = async (student) => {
 const sendRejectionEmail = async (student) => {
   if (!student?.email) throw new Error("Student email is missing");
 
-  const mailOptions = {
-    from: `"Campus Gate Pass System" <${process.env.EMAIL_USER}>`,
+  return sendBrevoEmail({
     to: student.email,
+    toName: student.fullName,
     subject: "Your Registration Has Been Rejected",
-    html: `
+    htmlContent: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
         <h2 style="color: #dc2626;">Registration Rejected</h2>
         <p>Dear <strong>${student.fullName}</strong>,</p>
@@ -98,9 +113,7 @@ const sendRejectionEmail = async (student) => {
         <p style="margin-top: 24px;">Regards,<br/><strong>Campus Gate Pass Admin Team</strong></p>
       </div>
     `,
-  };
-
-  return getTransporter().sendMail(mailOptions);
+  });
 };
 
 module.exports = {
