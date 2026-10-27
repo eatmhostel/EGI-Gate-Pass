@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import {
-  ScrollView, View, Text, TextInput, TouchableOpacity, 
+  ScrollView, View, Text, TextInput, TouchableOpacity,
   StyleSheet, Dimensions, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ import { AuthContext } from "./context/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ✅ IMPORT THE NEW HELPERS
-import { publicPost } from "../utils/api"; 
+import { publicPost } from "../utils/api";
 
 const { width, height } = Dimensions.get('window');
 
@@ -48,10 +48,10 @@ const Login = () => {
   // ✅ ADMIN LOGIN (Using publicPost)
   const handleLogin = async () => {
     if (!email || !password) return alert("Please fill all fields ❌");
-    
+
     setLoading(true);
     const data = await publicPost("/admin/login", { email, password });
-    
+
     if (data.success) {
       await saveSession({ name: email || "Admin", role: "admin" }, data.token);
       navigation.reset({ index: 0, routes: [{ name: "AdminDashboard" }] });
@@ -64,10 +64,10 @@ const Login = () => {
   // ✅ STUDENT LOGIN (Using publicPost)
   const handleStudentLogin = async () => {
     if (!email || !password) return alert("Please fill all fields ❌");
-    
+
     setLoading(true);
     const data = await publicPost("/student/login", { regNo: email, password });
-    
+
     if (data.success) {
       await AsyncStorage.setItem("studentId", data.user._id);
       await saveSession({
@@ -76,7 +76,7 @@ const Login = () => {
         course: data.user.course,
         branch: data.user.branch,
         email: data.user.email,
-        phone: data.user.phone, 
+        phone: data.user.phone,
         role: "student",
       }, data.token);
       navigation.reset({ index: 0, routes: [{ name: "StudentDashboard" }] });
@@ -89,10 +89,10 @@ const Login = () => {
   // ✅ SECURITY LOGIN (Using publicPost)
   const handleSecurityLogin = async () => {
     if (!email || !password) return alert("Please fill all fields ❌");
-    
+
     setLoading(true);
     const data = await publicPost("/security/login", { empId: email, password });
-    
+
     if (data.success) {
       await saveSession({
         name: data.user.name,
@@ -202,7 +202,10 @@ const Login = () => {
 
                 {portal === 'STUDENT' && (
                   <View style={styles.formOptions}>
-                    <TouchableOpacity hitSlop={10}>
+                    <TouchableOpacity
+                      hitSlop={10}
+                      onPress={() => navigation.navigate("ForgotPassword")}
+                    >
                       <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                     </TouchableOpacity>
                   </View>

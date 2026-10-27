@@ -27,6 +27,24 @@ const studentSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+
+  // ✅ NEW FIELDS for password reset flow
+  otp: {
+    type: String,
+    default: null,
+  },
+  otpExpires: {
+    type: Date,
+    default: null,
+  },
+  resetToken: {
+    type: String,
+    default: null,
+  },
+  resetTokenExpires: {
+    type: Date,
+    default: null,
+  },
 });
 
 module.exports = mongoose.model("Student", studentSchema);

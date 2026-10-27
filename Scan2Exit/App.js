@@ -10,14 +10,16 @@ import { AuthProvider, AuthContext } from "./src/context/AuthContext";
 // Screens
 import Index from "./src/index";
 import Login from "./src/Login";
-import Register from "./src/Student/Register";
+import ForgotPassword from "./src/ForgotPassword";
 
 // Student
+import Register from "./src/Student/Register";
 import StudentDashboard from "./src/Student/StudentDashboard";
 import Request from "./src/Student/Request";
 import RequestSuccess from "./src/Student/Request-success";
 import StudentHistory from "./src/Student/StudentHistory";
 import StudentProfile from "./src/Student/StudentProfile";
+
 
 // Security
 import SecurityDashboard from "./src/Security/SecurityDashboard";
@@ -146,9 +148,10 @@ function AppNavigator() {
           {/* ───────── COMMON ───────── */}
           <Stack.Screen name="Home" component={Index} />
           <Stack.Screen name="Login" component={Login} />
-          <Stack.Screen name="Register" component={Register} />
+          <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
 
           {/* ───────── STUDENT ───────── */}
+          <Stack.Screen name="Register" component={Register} />
           <Stack.Screen name="StudentDashboard" component={StudentDashboard} />
           <Stack.Screen name="Request" component={Request} />
           <Stack.Screen name="RequestSuccess" component={RequestSuccess} />

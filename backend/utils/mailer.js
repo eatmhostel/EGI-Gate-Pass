@@ -116,7 +116,36 @@ const sendRejectionEmail = async (student) => {
   });
 };
 
+/**
+ * Send OTP email to student for password reset
+ */
+const sendOTPEmail = async (student, otp) => {
+  if (!student?.email) throw new Error("Student email is missing");
+
+  return sendBrevoEmail({
+    to: student.email,
+    toName: student.fullName,
+    subject: "Password Reset OTP - Campus Gate Pass System",
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #0040a1;">Password Reset Request</h2>
+        <p>Dear <strong>${student.fullName}</strong>,</p>
+        <p>We received a request to reset your password. Use the OTP below to verify your identity:</p>
+        <div style="text-align: center; margin: 24px 0;">
+          <div style="display: inline-block; background: #0040a1; color: #ffffff; font-size: 32px; font-weight: 800; letter-spacing: 8px; padding: 16px 32px; border-radius: 12px;">
+            ${otp}
+          </div>
+        </div>
+        <p style="color: #dc2626; font-weight: 600;">⚠️ This OTP is valid for 10 minutes only.</p>
+        <p>If you did not request a password reset, please ignore this email or contact the administration office.</p>
+        <p style="margin-top: 24px;">Regards,<br/><strong>Campus Gate Pass Admin Team</strong></p>
+      </div>
+    `,
+  });
+};
+
 module.exports = {
   sendApprovalEmail,
   sendRejectionEmail,
+  sendOTPEmail,  
 };
